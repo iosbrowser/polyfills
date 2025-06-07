@@ -24,7 +24,7 @@ $(TWEAK_NAME)_CFLAGS = -fobjc-arc
 include $(THEOS_MAKE_PATH)/tweak.mk
 
 before-all::
-	@echo "Updating Polyfills.h"
+	@echo "Updating Polyfills headers..."
 	@./generate_polyfill_header.sh scripts Polyfills scripts
 	@./generate_polyfill_header.sh scripts-post Polyfills-Post scriptsPost
 
