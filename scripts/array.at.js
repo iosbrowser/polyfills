@@ -1,7 +1,7 @@
 if (!Array.prototype.at) {
-  Array.prototype.at = function(index) {
-    if (index < 0) index = this.length + index;
-    if (index >= 0 && index < this.length) return this[index];
-    return undefined;
-  };
+    Array.prototype.at = function(index) {
+        if (index < 0) index = this.length + index;
+        if (index >= 0 && index < this.length) return this[index];
+        return undefined;
+    };
 }

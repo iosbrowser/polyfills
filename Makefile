@@ -22,6 +22,12 @@ $(TWEAK_NAME)_FILES = Tweak.x
 $(TWEAK_NAME)_CFLAGS = -fobjc-arc
 
 include $(THEOS_MAKE_PATH)/tweak.mk
+
+before-all::
+	@echo "Updating Polyfills.h"
+	@./generate_polyfill_header.sh scripts Polyfills scripts
+	@./generate_polyfill_header.sh scripts-post Polyfills-Post scriptsPost
+
 ifeq ($(SIMULATOR),1)
 setup:: clean all
 	@rm -f /opt/simject/$(TWEAK_NAME).dylib
