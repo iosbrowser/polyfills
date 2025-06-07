@@ -14,7 +14,6 @@
     }
     WKUserScript *userScript = [[WKUserScript alloc] initWithSource:scripts injectionTime:WKUserScriptInjectionTimeAtDocumentStart forMainFrameOnly:YES];
     WKUserScript *userScriptPost = [[WKUserScript alloc] initWithSource:scriptsPost injectionTime:WKUserScriptInjectionTimeAtDocumentEnd forMainFrameOnly:YES];
-    [controller removeAllUserScripts];
     [controller addUserScript:userScript];
     [controller addUserScript:userScriptPost];
     return %orig;
