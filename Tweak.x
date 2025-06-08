@@ -12,8 +12,8 @@
         controller = [[WKUserContentController alloc] init];
         configuration.userContentController = controller;
     }
-    WKUserScript *userScript = [[WKUserScript alloc] initWithSource:scripts injectionTime:WKUserScriptInjectionTimeAtDocumentStart forMainFrameOnly:YES];
-    WKUserScript *userScriptPost = [[WKUserScript alloc] initWithSource:scriptsPost injectionTime:WKUserScriptInjectionTimeAtDocumentEnd forMainFrameOnly:YES];
+    WKUserScript *userScript = [[WKUserScript alloc] initWithSource:scripts injectionTime:WKUserScriptInjectionTimeAtDocumentStart forMainFrameOnly:NO];
+    WKUserScript *userScriptPost = [[WKUserScript alloc] initWithSource:scriptsPost injectionTime:WKUserScriptInjectionTimeAtDocumentEnd forMainFrameOnly:NO];
     [controller addUserScript:userScript];
     [controller addUserScript:userScriptPost];
     return %orig;

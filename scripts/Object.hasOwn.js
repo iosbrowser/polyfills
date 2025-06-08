@@ -1,1 +1,5 @@
-"hasOwn" in Object || (Object.hasOwn = Object.call.bind(Object.hasOwnProperty));
+if (!("hasOwn" in Object)) {
+    Object.hasOwn = function(obj, prop) {
+        return Object.prototype.hasOwnProperty.call(obj, prop);
+    };
+}

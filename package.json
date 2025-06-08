@@ -1,0 +1,24 @@
+{
+  "name": "polyfills",
+  "version": "1.0.0",
+  "description": "This project provides JavaScript polyfills (and fixes) for Mobile Safari and WebKit-based views on iOS.",
+  "main": "Polyfills-Post.h.js",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/PoomSmart/Polyfills.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/PoomSmart/Polyfills/issues"
+  },
+  "homepage": "https://github.com/PoomSmart/Polyfills#readme",
+  "devDependencies": {
+    "@babel/cli": "^7.27.2",
+    "@babel/core": "^7.27.4",
+    "@babel/plugin-transform-block-scoping": "^7.27.1",
+    "@babel/plugin-transform-arrow-functions": "^7.27.1",
+    "uglify-js": "^3.19.3"
+  }
+}

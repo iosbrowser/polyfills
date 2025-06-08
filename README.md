@@ -19,6 +19,10 @@ The JavaScript polyfills can be found in `/scripts` and `/scripts-post` folders.
 # Building
 
 ```sh
-npm install uglify-js # Run once
+npm install
 make
 ```
+
+# Additional Notes
+
+Check out the [WKExperimentalFeatures.md](WKExperimentalFeatures.md) file for recommended WebKit experimental features to enable to enhance web compatibility further.

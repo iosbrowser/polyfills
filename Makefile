@@ -12,7 +12,7 @@ else
 	endif
 endif
 
-INSTALL_TARGET_PROCESSES = MobileSafari SafariViewService
+INSTALL_TARGET_PROCESSES = MobileSafari SafariViewService com.apple.WebKit.WebContent
 
 include $(THEOS)/makefiles/common.mk
 

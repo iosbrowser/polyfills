@@ -1,8 +1,15 @@
-Promise.allSettled = Promise.allSettled || ((promises) => Promise.all(promises.map(p => p
-    .then(value => ({
-        status: 'fulfilled', value
-    }))
-    .catch(reason => ({
-        status: 'rejected', reason
-    }))
-)));
+Promise.allSettled = Promise.allSettled || (function (promises) {
+    return Promise.all(promises.map(function (p) {
+        return p
+            .then(function (value) {
+                return {
+                    status: 'fulfilled', value: value
+                };
+            })
+            .catch(function (reason) {
+                return {
+                    status: 'rejected', reason: reason
+                };
+            });
+    }));
+});

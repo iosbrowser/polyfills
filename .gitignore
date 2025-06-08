@@ -1,4 +1,5 @@
 .theos/
 packages/
 .DS_Store
-Experimental.h
+node_modules/
+*.h.js
