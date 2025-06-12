@@ -3,3 +3,5 @@ packages/
 .DS_Store
 node_modules/
 *.h.js
+*.scripts*.js
+*.scriptsPost*.js

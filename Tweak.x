@@ -1,6 +1,7 @@
 #define CHECK_TARGET
 #import <PSHeader/PS.h>
 #import <WebKit/WebKit.h>
+#import <version.h>
 #import "Polyfills.h"
 #import "Polyfills-Post.h"
 
@@ -12,11 +13,14 @@
         controller = [[WKUserContentController alloc] init];
         configuration.userContentController = controller;
     }
-    WKUserScript *userScript = [[WKUserScript alloc] initWithSource:scripts injectionTime:WKUserScriptInjectionTimeAtDocumentStart forMainFrameOnly:NO];
-    WKUserScript *userScriptPost = [[WKUserScript alloc] initWithSource:scriptsPost injectionTime:WKUserScriptInjectionTimeAtDocumentEnd forMainFrameOnly:NO];
-    [controller addUserScript:userScript];
-    [controller addUserScript:userScriptPost];
-    return %orig;
+    [controller addUserScript:[[WKUserScript alloc] initWithSource:scripts injectionTime:WKUserScriptInjectionTimeAtDocumentStart forMainFrameOnly:NO]];
+    if (!IS_IOS_OR_NEWER(iOS_16_4)) {
+        [controller addUserScript:[[WKUserScript alloc] initWithSource:scripts_before_16_4 injectionTime:WKUserScriptInjectionTimeAtDocumentStart forMainFrameOnly:NO]];
+    }
+    [controller addUserScript:[[WKUserScript alloc] initWithSource:scriptsPost injectionTime:WKUserScriptInjectionTimeAtDocumentEnd forMainFrameOnly:NO]];
+    WKWebView *webView = %orig;
+    webView.customUserAgent = @"Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.5 Safari/605.1.15";
+    return webView;
 }
 
 %end
