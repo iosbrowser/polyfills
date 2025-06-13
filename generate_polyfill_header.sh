@@ -83,7 +83,7 @@ process_js_bundle_to_header_var() {
     # Escape backslashes and double quotes, and add a backslash at the end of each line
     sed -e 's/\\/\\\\/g' -e 's/"/\\"/g' -e 's/$/\\/' "$temp_js_minified" >> "$out_h_file"
     # Remove the trailing backslash and newline from the last line
-    truncate -s-2 "$out_h_file"
+    truncate -s-1 "$out_h_file"
     echo "\";" >> "$out_h_file"
   else
     # No JS content found or processed
