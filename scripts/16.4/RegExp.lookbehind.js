@@ -1,4 +1,4 @@
-// ChatGPT Lookbehind Polyfill
+// ChatGPT Lookbehind Polyfill with RegExp constructor and static group support
 
 // Minimal XRegExp-like shim
 var XRegExp = (function () {
@@ -19,8 +19,20 @@ var XRegExp = (function () {
     return { exec, replace };
 })();
 
-// Lookbehind polyfill plugin
 (function (XRegExp) {
+
+    function updateLegacyRegExpStatics(match, str) {
+        if (!match || !match[0]) return;
+        const input = str || '';
+        RegExp.input = input;
+        RegExp.lastMatch = match[0];
+        RegExp.lastParen = match[match.length - 1] || '';
+        RegExp.leftContext = input.slice(0, match.index);
+        RegExp.rightContext = input.slice(match.index + match[0].length);
+        for (let i = 1; i <= 9; i++) {
+            RegExp[`$${i}`] = match[i] || '';
+        }
+    }
 
     function extractLookbehind(source) {
         const start = source.indexOf('(?<');
@@ -59,7 +71,7 @@ var XRegExp = (function () {
         const lookbehindRegex = XRegExp.exec(lbBody, /^(?:\(\?[\w$]+\))?(.*)$/);
         const pattern = lookbehindRegex ? lookbehindRegex[1] : lbBody;
         return {
-            lb: new RegExp(pattern + '$(?!\\s)'),
+            lb: new RegExp(pattern + '$(?!\s)'),
             type: lbType
         };
     }
@@ -70,6 +82,7 @@ var XRegExp = (function () {
         while (match = XRegExp.exec(str, regex, pos)) {
             leftContext = str.slice(0, match.index);
             if (lb.type === lb.lb.test(leftContext)) {
+                updateLegacyRegExpStatics(str, match, regex);
                 return match;
             }
             pos = match.index + 1;
@@ -93,6 +106,7 @@ var XRegExp = (function () {
             leftContext = str.slice(0, match.index);
             if (lb.type === lb.lb.test(leftContext)) {
                 matches.push(match[0]);
+                updateLegacyRegExpStatics(str, match, regex);
                 pos = match.index + (match[0].length || 1);
             } else {
                 pos = match.index + 1;
@@ -107,6 +121,7 @@ var XRegExp = (function () {
         while (match = XRegExp.exec(str, regex, pos)) {
             leftContext = str.slice(0, match.index);
             if (lb.type === lb.lb.test(leftContext)) {
+                updateLegacyRegExpStatics(str, match, regex);
                 output += str.slice(lastEnd, match.index) + XRegExp.replace(match[0], regex, replacement);
                 lastEnd = match.index + match[0].length;
                 if (!regex.global) break;
@@ -118,8 +133,6 @@ var XRegExp = (function () {
         return output + str.slice(lastEnd);
     };
 
-    // --- Patch methods on RegExp and String ---
-
     const NativeRegExp = RegExp;
     const originalExec = NativeRegExp.prototype.exec;
     const originalTest = NativeRegExp.prototype.test;
@@ -127,27 +140,28 @@ var XRegExp = (function () {
     const originalSearch = String.prototype.search;
     const originalReplace = String.prototype.replace;
 
-    // RegExp.prototype.exec
     NativeRegExp.prototype.exec = function (str) {
         const lbInfo = extractLookbehind(this.source);
         if (lbInfo) {
             const mainPattern = this.source.replace(lbInfo.full, '');
             return XRegExp.execLb(str, lbInfo, new NativeRegExp(mainPattern, this.flags));
         }
-        return originalExec.call(this, str);
+        const match = originalExec.call(this, str);
+        if (match) updateLegacyRegExpStatics(str, match, this);
+        return match;
     };
 
-    // RegExp.prototype.test
     NativeRegExp.prototype.test = function (str) {
         const lbInfo = extractLookbehind(this.source);
         if (lbInfo) {
             const mainPattern = this.source.replace(lbInfo.full, '');
             return XRegExp.testLb(str, lbInfo, new NativeRegExp(mainPattern, this.flags));
         }
-        return originalTest.call(this, str);
+        const match = originalExec.call(this, str);
+        if (match) updateLegacyRegExpStatics(str, match, this);
+        return !!match;
     };
 
-    // String.prototype.match
     String.prototype.match = function (regex) {
         if (regex && regex.source && regex.source.includes('(?<')) {
             const lbInfo = extractLookbehind(regex.source);
@@ -162,10 +176,11 @@ var XRegExp = (function () {
                     })();
             }
         }
-        return originalMatch.call(this, regex);
+        const match = originalMatch.call(this, regex);
+        if (match && regex instanceof RegExp) updateLegacyRegExpStatics(this, match, regex);
+        return match;
     };
 
-    // String.prototype.search
     String.prototype.search = function (regex) {
         if (regex && regex.source && regex.source.includes('(?<')) {
             const lbInfo = extractLookbehind(regex.source);
@@ -177,7 +192,6 @@ var XRegExp = (function () {
         return originalSearch.call(this, regex);
     };
 
-    // String.prototype.replace
     String.prototype.replace = function (regex, replacement) {
         if (regex && regex.source && regex.source.includes('(?<')) {
             const lbInfo = extractLookbehind(regex.source);
@@ -189,7 +203,6 @@ var XRegExp = (function () {
         return originalReplace.call(this, regex, replacement);
     };
 
-    // --- Override global RegExp constructor ---
     function PolyfilledRegExp(pattern, flags) {
         if (this instanceof PolyfilledRegExp) {
             const source = pattern instanceof NativeRegExp ? pattern.source : String(pattern);
@@ -212,11 +225,9 @@ var XRegExp = (function () {
 
     PolyfilledRegExp.prototype = Object.create(NativeRegExp.prototype);
     PolyfilledRegExp.prototype.constructor = PolyfilledRegExp;
-
     PolyfilledRegExp.prototype.exec = NativeRegExp.prototype.exec;
     PolyfilledRegExp.prototype.test = NativeRegExp.prototype.test;
 
-    // Swap out the global RegExp
     window.RegExp = PolyfilledRegExp;
 
 })(XRegExp);

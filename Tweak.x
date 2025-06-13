@@ -6,20 +6,7 @@
 #import "Polyfills.h"
 #import "Polyfills-Post.h"
 
-%hook WKWebView
-
-- (instancetype)initWithFrame:(CGRect)frame configuration:(WKWebViewConfiguration *)configuration {
-    WKUserContentController *controller = configuration.userContentController;
-    if (!controller) {
-        controller = [[WKUserContentController alloc] init];
-        configuration.userContentController = controller;
-    }
-    [controller addUserScript:[[WKUserScript alloc] initWithSource:scripts injectionTime:WKUserScriptInjectionTimeAtDocumentStart forMainFrameOnly:NO]];
-    if (!IS_IOS_OR_NEWER(iOS_16_4)) {
-        [controller addUserScript:[[WKUserScript alloc] initWithSource:scripts_before_16_4 injectionTime:WKUserScriptInjectionTimeAtDocumentStart forMainFrameOnly:NO]];
-    }
-    [controller addUserScript:[[WKUserScript alloc] initWithSource:scriptsPost injectionTime:WKUserScriptInjectionTimeAtDocumentEnd forMainFrameOnly:NO]];
-    WKWebView *webView = %orig;
+static void overrideUserAgent(WKWebView *webView) {
     [webView evaluateJavaScript:@"navigator.userAgent" completionHandler:^(id result, NSError *error) {
         if (error || ![result isKindOfClass:[NSString class]]) {
             HBLogDebug(@"Failed to get user agent: %@", error.localizedDescription);
@@ -37,11 +24,35 @@
         NSString *uaWithOS = [regex stringByReplacingMatchesInString:defaultUA options:0 range:NSMakeRange(0, defaultUA.length) withTemplate:[NSString stringWithFormat:@"OS %@", spoofedVersion]];
         NSRegularExpression *versionRegex = [NSRegularExpression regularExpressionWithPattern:@"Version/\\d+(\\.\\d+)*" options:0 error:nil];
         NSString *finalUA = [versionRegex stringByReplacingMatchesInString:uaWithOS options:0 range:NSMakeRange(0, uaWithOS.length) withTemplate:spoofedSafariVersion];
-        webView.customUserAgent = finalUA;
         HBLogDebug(@"Custom User Agent: %@", finalUA);
+        webView.customUserAgent = finalUA;
     }];
+}
 
+%hook WKWebView
+
+- (instancetype)initWithFrame:(CGRect)frame configuration:(WKWebViewConfiguration *)configuration {
+    WKUserContentController *controller = configuration.userContentController;
+    if (!controller) {
+        controller = [[WKUserContentController alloc] init];
+        configuration.userContentController = controller;
+    }
+    if (!IS_IOS_OR_NEWER(iOS_14_1)) {
+        [controller addUserScript:[[WKUserScript alloc] initWithSource:scripts_before_14_1 injectionTime:WKUserScriptInjectionTimeAtDocumentStart forMainFrameOnly:NO]];
+    }
+    [controller addUserScript:[[WKUserScript alloc] initWithSource:scripts injectionTime:WKUserScriptInjectionTimeAtDocumentStart forMainFrameOnly:NO]];
+    if (!IS_IOS_OR_NEWER(iOS_16_4)) {
+        [controller addUserScript:[[WKUserScript alloc] initWithSource:scripts_before_16_4 injectionTime:WKUserScriptInjectionTimeAtDocumentStart forMainFrameOnly:NO]];
+    }
+    [controller addUserScript:[[WKUserScript alloc] initWithSource:scriptsPost injectionTime:WKUserScriptInjectionTimeAtDocumentEnd forMainFrameOnly:NO]];
+    WKWebView *webView = %orig;
+    overrideUserAgent(webView);
     return webView;
+}
+
+- (void)setCustomUserAgent:(NSString *)customUserAgent {
+    %orig;
+    overrideUserAgent(self);
 }
 
 %end
