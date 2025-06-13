@@ -1,19 +1,25 @@
-Array.prototype.findLastIndex = Array.prototype.findLastIndex || function (callback, thisArg) {
-    if (this == null) {
-        throw new TypeError('Array.prototype.findLastIndex called on null or undefined');
-    }
-    if (typeof callback !== 'function') {
-        throw new TypeError('callback must be a function');
-    }
+if (!Array.prototype.findLastIndex) {
+    Object.defineProperty(Array.prototype, 'findLastIndex', {
+        value: function (callback, thisArg) {
+            if (this == null) {
+                throw new TypeError('Array.prototype.findLastIndex called on null or undefined');
+            }
+            if (typeof callback !== 'function') {
+                throw new TypeError('callback must be a function');
+            }
 
-    var array = Object(this);
-    var length = array.length >>> 0;
+            var array = Object(this);
+            var length = array.length >>> 0;
 
-    for (var i = length - 1; i >= 0; i--) {
-        if (i in array && callback.call(thisArg, array[i], i, array)) {
-            return i;
-        }
-    }
+            for (var i = length - 1; i >= 0; i--) {
+                if (i in array && callback.call(thisArg, array[i], i, array)) {
+                    return i;
+                }
+            }
 
-    return -1;
-};
+            return -1;
+        },
+        writable: true,
+        configurable: true
+    });
+}
