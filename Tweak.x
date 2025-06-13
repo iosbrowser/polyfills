@@ -1,4 +1,5 @@
 #define CHECK_TARGET
+#import <HBLog.h>
 #import <PSHeader/PS.h>
 #import <WebKit/WebKit.h>
 #import <version.h>
@@ -19,7 +20,27 @@
     }
     [controller addUserScript:[[WKUserScript alloc] initWithSource:scriptsPost injectionTime:WKUserScriptInjectionTimeAtDocumentEnd forMainFrameOnly:NO]];
     WKWebView *webView = %orig;
-    webView.customUserAgent = @"Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.5 Safari/605.1.15";
+    [webView evaluateJavaScript:@"navigator.userAgent" completionHandler:^(id result, NSError *error) {
+        if (error || ![result isKindOfClass:[NSString class]]) {
+            HBLogDebug(@"Failed to get user agent: %@", error.localizedDescription);
+            return;
+        }
+        NSString *defaultUA = (NSString *)result;
+        NSString *spoofedVersion = @"18_5";
+        NSString *spoofedSafariVersion = @"Version/18.5";
+        NSError *regexError = nil;
+        NSRegularExpression *regex = [NSRegularExpression regularExpressionWithPattern:@"OS \\d+_\\d+(?:_\\d+)?" options:0 error:&regexError];
+        if (regexError) {
+            HBLogDebug(@"Regex error: %@", regexError.localizedDescription);
+            return;
+        }
+        NSString *uaWithOS = [regex stringByReplacingMatchesInString:defaultUA options:0 range:NSMakeRange(0, defaultUA.length) withTemplate:[NSString stringWithFormat:@"OS %@", spoofedVersion]];
+        NSRegularExpression *versionRegex = [NSRegularExpression regularExpressionWithPattern:@"Version/\\d+(\\.\\d+)*" options:0 error:nil];
+        NSString *finalUA = [versionRegex stringByReplacingMatchesInString:uaWithOS options:0 range:NSMakeRange(0, uaWithOS.length) withTemplate:spoofedSafariVersion];
+        webView.customUserAgent = finalUA;
+        HBLogDebug(@"Custom User Agent: %@", finalUA);
+    }];
+
     return webView;
 }
 
