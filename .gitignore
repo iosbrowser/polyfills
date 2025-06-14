@@ -5,3 +5,4 @@ node_modules/
 *.h.js
 *.scripts*.js
 *.scriptsPost*.js
+*.js.disabled

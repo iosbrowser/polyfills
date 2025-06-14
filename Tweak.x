@@ -42,6 +42,9 @@ static void overrideUserAgent(WKWebView *webView) {
     if (!IS_IOS_OR_NEWER(iOS_16_4)) {
         [controller addUserScript:[[WKUserScript alloc] initWithSource:scripts_before_16_4 injectionTime:WKUserScriptInjectionTimeAtDocumentStart forMainFrameOnly:NO]];
     }
+    if (!IS_IOS_OR_NEWER(iOS_16_0)) {
+        [controller addUserScript:[[WKUserScript alloc] initWithSource:scripts_before_16_0 injectionTime:WKUserScriptInjectionTimeAtDocumentStart forMainFrameOnly:NO]];
+    }
     if (!IS_IOS_OR_NEWER(iOS_15_4)) {
         [controller addUserScript:[[WKUserScript alloc] initWithSource:scripts_before_15_4 injectionTime:WKUserScriptInjectionTimeAtDocumentStart forMainFrameOnly:NO]];
     }
