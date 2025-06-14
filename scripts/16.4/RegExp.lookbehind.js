@@ -1,233 +1,171 @@
-// ChatGPT Lookbehind Polyfill with RegExp constructor and static group support
+(() => {
+  const NativeRegExp = RegExp;
+  const nativeExec = RegExp.prototype.exec;
+  const nativeTest = RegExp.prototype.test;
 
-// Minimal XRegExp-like shim
-var XRegExp = (function () {
-    function exec(str, regex, pos) {
-        regex = cloneRegex(regex);
-        regex.lastIndex = pos || 0;
-        return regex.exec(str);
+  let disablePatch = false;
+
+  function containsLookbehind(pattern) {
+    if (typeof pattern !== 'string') return false;
+    for (let i = 0; i < pattern.length - 3; i++) {
+      if (pattern[i] === '\\') {
+        i++; // Skip escaped char
+        continue;
+      }
+      if (
+        pattern[i] === '(' &&
+        pattern[i + 1] === '?' &&
+        pattern[i + 2] === '<' &&
+        (pattern[i + 3] === '=' || pattern[i + 3] === '!')
+      ) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  function extractLookbehind(pattern) {
+    const lbMatch = pattern.match(/^(\(\?<([=!])((?:\\.|[^\\()])*)\))/);
+    if (!lbMatch) return null;
+    return {
+      full: lbMatch[1],
+      type: lbMatch[2],    // "=" or "!"
+      pattern: lbMatch[3], // the inner lookbehind
+      rest: pattern.slice(lbMatch[1].length),
+    };
+  }
+
+  function emulateExec(str) {
+    if (disablePatch) return nativeExec.call(this, str);
+
+    const parsed = this.__lookbehind;
+    if (!parsed) return nativeExec.call(this, str);
+
+    let lbRe, mainRe;
+    try {
+      disablePatch = true;
+      lbRe = new NativeRegExp(parsed.pattern + "$", this.__originalFlags.replace("g", ""));
+      mainRe = new NativeRegExp(parsed.rest, this.__originalFlags);
+    } catch (e) {
+      disablePatch = false;
+      return null;
+    } finally {
+      disablePatch = false;
     }
 
-    function replace(str, regex, replacement) {
-        return str.replace(regex, replacement);
+    for (let pos = 0; pos <= str.length; pos++) {
+      let mainMatch;
+      try {
+        disablePatch = true;
+        mainMatch = mainRe.exec(str.slice(pos));
+      } finally {
+        disablePatch = false;
+      }
+
+      if (!mainMatch || mainMatch.index !== 0) continue;
+
+      const prefix = str.slice(0, pos);
+
+      let lbMatchFound;
+      try {
+        disablePatch = true;
+        lbMatchFound = lbRe.test(prefix);
+      } finally {
+        disablePatch = false;
+      }
+
+      if ((parsed.type === "=" && lbMatchFound) || (parsed.type === "!" && !lbMatchFound)) {
+        mainMatch.index = pos;
+        mainMatch.input = str;
+        return mainMatch;
+      }
     }
 
-    function cloneRegex(regex) {
-        return new RegExp(regex.source, regex.flags);
+    return null;
+  }
+
+  function emulateTest(str) {
+    if (disablePatch) return nativeTest.call(this, str);
+
+    const result = emulateExec.call(this, str);
+    return result !== null;
+  }
+
+  // Patch RegExp constructor
+  function PatchedRegExp(pattern, flags) {
+    const patternStr = typeof pattern === 'string' ? pattern : pattern.source;
+    const flagsStr = flags ?? (pattern && pattern.flags) ?? "";
+
+    if (!containsLookbehind(patternStr)) {
+      return new NativeRegExp(patternStr, flagsStr);
     }
 
-    return { exec, replace };
+    const parsed = extractLookbehind(patternStr);
+    if (!parsed) {
+      return new NativeRegExp(patternStr, flagsStr);
+    }
+
+    const fakePattern = parsed.rest;
+    const re = new NativeRegExp(fakePattern, flagsStr);
+
+    // Store data safely to avoid recursive access
+    re.__lookbehind = parsed;
+    re.__originalFlags = flagsStr;
+
+    re.exec = emulateExec;
+    re.test = emulateTest;
+
+    return re;
+  }
+
+  // Preserve prototype chain
+  PatchedRegExp.prototype = NativeRegExp.prototype;
+  PatchedRegExp.prototype.constructor = PatchedRegExp;
+
+  // Replace global RegExp
+  RegExp = PatchedRegExp;
+
+  // Also patch RegExp.prototype.exec/test for native regexes
+  RegExp.prototype.exec = function patchedExec(str) {
+    if (disablePatch) return nativeExec.call(this, str);
+
+    const patternStr = this.source;
+    const flagsStr = this.flags;
+
+    if (!containsLookbehind(patternStr)) {
+      return nativeExec.call(this, str);
+    }
+
+    const parsed = extractLookbehind(patternStr);
+    if (!parsed) {
+      return nativeExec.call(this, str);
+    }
+
+    // Create a temporary wrapper RegExp object
+    const fake = new NativeRegExp(parsed.rest, flagsStr);
+    fake.__lookbehind = parsed;
+    fake.__originalFlags = flagsStr;
+    return emulateExec.call(fake, str);
+  };
+
+  RegExp.prototype.test = function patchedTest(str) {
+    if (disablePatch) return nativeTest.call(this, str);
+
+    const patternStr = this.source;
+    const flagsStr = this.flags;
+
+    if (!containsLookbehind(patternStr)) {
+      return nativeTest.call(this, str);
+    }
+
+    const parsed = extractLookbehind(patternStr);
+    if (!parsed) {
+      return nativeTest.call(this, str);
+    }
+
+    const fake = new NativeRegExp(parsed.rest, flagsStr);
+    fake.__lookbehind = parsed;
+    fake.__originalFlags = flagsStr;
+    return emulateTest.call(fake, str);
+  };
 })();
-
-(function (XRegExp) {
-
-    function updateLegacyRegExpStatics(match, str) {
-        if (!match || !match[0]) return;
-        const input = str || '';
-        RegExp.input = input;
-        RegExp.lastMatch = match[0];
-        RegExp.lastParen = match[match.length - 1] || '';
-        RegExp.leftContext = input.slice(0, match.index);
-        RegExp.rightContext = input.slice(match.index + match[0].length);
-        for (let i = 1; i <= 9; i++) {
-            RegExp[`$${i}`] = match[i] || '';
-        }
-    }
-
-    function extractLookbehind(source) {
-        const start = source.indexOf('(?<');
-        if (start === -1) return null;
-
-        const typeChar = source[start + 3];
-        if (typeChar !== '=' && typeChar !== '!') return null;
-
-        const type = typeChar === '=';
-        let depth = 1;
-        let i = start + 4;
-        const len = source.length;
-
-        while (i < len && depth > 0) {
-            const char = source[i];
-            if (char === '(') depth++;
-            else if (char === ')') depth--;
-            else if (char === '\\') i++; // skip escaped char
-            i++;
-        }
-
-        if (depth !== 0) return null;
-
-        const full = source.slice(start, i);
-        const body = source.slice(start + 4, i - 1);
-
-        return {
-            full,
-            type,
-            body,
-            main: source.replace(full, '')
-        };
-    }
-
-    function prepareLb(lbBody, lbType) {
-        const lookbehindRegex = XRegExp.exec(lbBody, /^(?:\(\?[\w$]+\))?(.*)$/);
-        const pattern = lookbehindRegex ? lookbehindRegex[1] : lbBody;
-        return {
-            lb: new RegExp(pattern + '$(?!\s)'),
-            type: lbType
-        };
-    }
-
-    XRegExp.execLb = function (str, lbStr, regex) {
-        let pos = 0, match, leftContext;
-        const lb = prepareLb(lbStr.body, lbStr.type);
-        while (match = XRegExp.exec(str, regex, pos)) {
-            leftContext = str.slice(0, match.index);
-            if (lb.type === lb.lb.test(leftContext)) {
-                updateLegacyRegExpStatics(str, match, regex);
-                return match;
-            }
-            pos = match.index + 1;
-        }
-        return null;
-    };
-
-    XRegExp.testLb = function (str, lbStr, regex) {
-        return !!XRegExp.execLb(str, lbStr, regex);
-    };
-
-    XRegExp.searchLb = function (str, lbStr, regex) {
-        const match = XRegExp.execLb(str, lbStr, regex);
-        return match ? match.index : -1;
-    };
-
-    XRegExp.matchAllLb = function (str, lbStr, regex) {
-        const matches = [], lb = prepareLb(lbStr.body, lbStr.type);
-        let pos = 0, match, leftContext;
-        while (match = XRegExp.exec(str, regex, pos)) {
-            leftContext = str.slice(0, match.index);
-            if (lb.type === lb.lb.test(leftContext)) {
-                matches.push(match[0]);
-                updateLegacyRegExpStatics(str, match, regex);
-                pos = match.index + (match[0].length || 1);
-            } else {
-                pos = match.index + 1;
-            }
-        }
-        return matches;
-    };
-
-    XRegExp.replaceLb = function (str, lbStr, regex, replacement) {
-        const lb = prepareLb(lbStr.body, lbStr.type);
-        let output = '', pos = 0, lastEnd = 0, match, leftContext;
-        while (match = XRegExp.exec(str, regex, pos)) {
-            leftContext = str.slice(0, match.index);
-            if (lb.type === lb.lb.test(leftContext)) {
-                updateLegacyRegExpStatics(str, match, regex);
-                output += str.slice(lastEnd, match.index) + XRegExp.replace(match[0], regex, replacement);
-                lastEnd = match.index + match[0].length;
-                if (!regex.global) break;
-                pos = match.index + (match[0].length || 1);
-            } else {
-                pos = match.index + 1;
-            }
-        }
-        return output + str.slice(lastEnd);
-    };
-
-    const NativeRegExp = RegExp;
-    const originalExec = NativeRegExp.prototype.exec;
-    const originalTest = NativeRegExp.prototype.test;
-    const originalMatch = String.prototype.match;
-    const originalSearch = String.prototype.search;
-    const originalReplace = String.prototype.replace;
-
-    NativeRegExp.prototype.exec = function (str) {
-        const lbInfo = extractLookbehind(this.source);
-        if (lbInfo) {
-            const mainPattern = this.source.replace(lbInfo.full, '');
-            return XRegExp.execLb(str, lbInfo, new NativeRegExp(mainPattern, this.flags));
-        }
-        const match = originalExec.call(this, str);
-        if (match) updateLegacyRegExpStatics(str, match, this);
-        return match;
-    };
-
-    NativeRegExp.prototype.test = function (str) {
-        const lbInfo = extractLookbehind(this.source);
-        if (lbInfo) {
-            const mainPattern = this.source.replace(lbInfo.full, '');
-            return XRegExp.testLb(str, lbInfo, new NativeRegExp(mainPattern, this.flags));
-        }
-        const match = originalExec.call(this, str);
-        if (match) updateLegacyRegExpStatics(str, match, this);
-        return !!match;
-    };
-
-    String.prototype.match = function (regex) {
-        if (regex && regex.source && regex.source.includes('(?<')) {
-            const lbInfo = extractLookbehind(regex.source);
-            if (lbInfo) {
-                const mainPattern = regex.source.replace(lbInfo.full, '');
-                const mainRegex = new NativeRegExp(mainPattern, regex.flags);
-                return regex.global
-                    ? XRegExp.matchAllLb(this, lbInfo, mainRegex)
-                    : (() => {
-                        const m = XRegExp.execLb(this, lbInfo, mainRegex);
-                        return m ? [m[0]] : null;
-                    })();
-            }
-        }
-        const match = originalMatch.call(this, regex);
-        if (match && regex instanceof RegExp) updateLegacyRegExpStatics(this, match, regex);
-        return match;
-    };
-
-    String.prototype.search = function (regex) {
-        if (regex && regex.source && regex.source.includes('(?<')) {
-            const lbInfo = extractLookbehind(regex.source);
-            if (lbInfo) {
-                const mainPattern = regex.source.replace(lbInfo.full, '');
-                return XRegExp.searchLb(this, lbInfo, new NativeRegExp(mainPattern, regex.flags));
-            }
-        }
-        return originalSearch.call(this, regex);
-    };
-
-    String.prototype.replace = function (regex, replacement) {
-        if (regex && regex.source && regex.source.includes('(?<')) {
-            const lbInfo = extractLookbehind(regex.source);
-            if (lbInfo) {
-                const mainPattern = regex.source.replace(lbInfo.full, '');
-                return XRegExp.replaceLb(this, lbInfo, new NativeRegExp(mainPattern, regex.flags), replacement);
-            }
-        }
-        return originalReplace.call(this, regex, replacement);
-    };
-
-    function PolyfilledRegExp(pattern, flags) {
-        if (this instanceof PolyfilledRegExp) {
-            const source = pattern instanceof NativeRegExp ? pattern.source : String(pattern);
-            const actualFlags = pattern instanceof NativeRegExp ? (flags || pattern.flags) : (flags || "");
-
-            const lbInfo = extractLookbehind(source);
-            const mainPattern = lbInfo ? lbInfo.main : source;
-
-            const re = new NativeRegExp(mainPattern, actualFlags);
-            if (lbInfo) {
-                re._hasPolyfillLookbehind = true;
-                re._lookbehind = lbInfo;
-            }
-
-            Object.setPrototypeOf(re, PolyfilledRegExp.prototype);
-            return re;
-        }
-        return new PolyfilledRegExp(pattern, flags);
-    }
-
-    PolyfilledRegExp.prototype = Object.create(NativeRegExp.prototype);
-    PolyfilledRegExp.prototype.constructor = PolyfilledRegExp;
-    PolyfilledRegExp.prototype.exec = NativeRegExp.prototype.exec;
-    PolyfilledRegExp.prototype.test = NativeRegExp.prototype.test;
-
-    window.RegExp = PolyfilledRegExp;
-
-})(XRegExp);
