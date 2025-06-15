@@ -1,11 +1,16 @@
 # Polyfills
 
-This project provides JavaScript polyfills (and fixes) for Mobile Safari and WebKit-based views on iOS.
+Provides JavaScript polyfills (and fixes) for Mobile Safari and WebKit-based views on iOS.
 
 ## Description
 
-The `Polyfills` tweak injects JavaScript polyfills to enhance web compatibility for older iOS versions. It targets Mobile Safari, Safari View Services, and general WebKit views.
+This tweak injects JavaScript polyfills to enhance web compatibility for older iOS versions. It targets Mobile Safari, Safari View Services, and general WebKit views.
+
 The JavaScript polyfills can be found in `/scripts` and `/scripts-post` folders.
+
+The scripts under `/scripts` are injected at [the document start](https://developer.apple.com/documentation/webkit/wkuserscriptinjectiontime/atdocumentstart?language=objc), while those in `/scripts-post` are injected after [the document has loaded](https://developer.apple.com/documentation/webkit/wkuserscriptinjectiontime/atdocumentend?language=objc).
+
+The scripts may be put under a folder named after the specific iOS version, such as `15.0`. The scripts inside that folder will only be injected when the device iOS version is **no more than** the version specified in the folder name. That is, they will run under iOS 14.8 and earlier.
 
 ## Requirements
 
@@ -22,6 +27,12 @@ The JavaScript polyfills can be found in `/scripts` and `/scripts-post` folders.
 npm install
 make
 ```
+
+# Will it fix XXX website?
+
+TL;DR: Depends.
+
+If the website uses modern JavaScript features or APIs that are not supported by the iOS version you are using, this tweak will help polyfill those features. However, it may not cover every single case, especially if the website relies on very recent web standards or APIs that cannot be remedied with JavaScript alone.
 
 # Additional Notes
 
