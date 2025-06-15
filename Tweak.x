@@ -32,6 +32,8 @@ static void overrideUserAgent(WKWebView *webView) {
 
 %hook WKWebView
 
+static const void *InjectedKey = &InjectedKey;
+
 - (instancetype)initWithFrame:(CGRect)frame configuration:(WKWebViewConfiguration *)configuration {
     WKUserContentController *controller = configuration.userContentController;
     if (!controller) {
@@ -39,6 +41,7 @@ static void overrideUserAgent(WKWebView *webView) {
         configuration.userContentController = controller;
     }
     if (!objc_getAssociatedObject(controller, InjectedKey)) {
+        objc_setAssociatedObject(controller, InjectedKey, @YES, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
         [controller addUserScript:[[WKUserScript alloc] initWithSource:scripts injectionTime:WKUserScriptInjectionTimeAtDocumentStart forMainFrameOnly:NO]];
         if (!IS_IOS_OR_NEWER(iOS_16_4)) {
             [controller addUserScript:[[WKUserScript alloc] initWithSource:scripts_before_16_4 injectionTime:WKUserScriptInjectionTimeAtDocumentStart forMainFrameOnly:NO]];
