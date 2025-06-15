@@ -38,26 +38,28 @@ static void overrideUserAgent(WKWebView *webView) {
         controller = [[WKUserContentController alloc] init];
         configuration.userContentController = controller;
     }
-    [controller addUserScript:[[WKUserScript alloc] initWithSource:scripts injectionTime:WKUserScriptInjectionTimeAtDocumentStart forMainFrameOnly:NO]];
-    if (!IS_IOS_OR_NEWER(iOS_16_4)) {
-        [controller addUserScript:[[WKUserScript alloc] initWithSource:scripts_before_16_4 injectionTime:WKUserScriptInjectionTimeAtDocumentStart forMainFrameOnly:NO]];
+    if (!objc_getAssociatedObject(controller, InjectedKey)) {
+        [controller addUserScript:[[WKUserScript alloc] initWithSource:scripts injectionTime:WKUserScriptInjectionTimeAtDocumentStart forMainFrameOnly:NO]];
+        if (!IS_IOS_OR_NEWER(iOS_16_4)) {
+            [controller addUserScript:[[WKUserScript alloc] initWithSource:scripts_before_16_4 injectionTime:WKUserScriptInjectionTimeAtDocumentStart forMainFrameOnly:NO]];
+        }
+        if (!IS_IOS_OR_NEWER(iOS_16_0)) {
+            [controller addUserScript:[[WKUserScript alloc] initWithSource:scripts_before_16_0 injectionTime:WKUserScriptInjectionTimeAtDocumentStart forMainFrameOnly:NO]];
+        }
+        if (!IS_IOS_OR_NEWER(iOS_15_4)) {
+            [controller addUserScript:[[WKUserScript alloc] initWithSource:scripts_before_15_4 injectionTime:WKUserScriptInjectionTimeAtDocumentStart forMainFrameOnly:NO]];
+        }
+        if (!IS_IOS_OR_NEWER(iOS_13_1)) {
+            [controller addUserScript:[[WKUserScript alloc] initWithSource:scripts_before_13_1 injectionTime:WKUserScriptInjectionTimeAtDocumentStart forMainFrameOnly:NO]];
+        }
+        if (!IS_IOS_OR_NEWER(iOS_13_0)) {
+            [controller addUserScript:[[WKUserScript alloc] initWithSource:scripts_before_13_0 injectionTime:WKUserScriptInjectionTimeAtDocumentStart forMainFrameOnly:NO]];
+        }
+        if (!IS_IOS_OR_NEWER(iOS_12_0)) {
+            [controller addUserScript:[[WKUserScript alloc] initWithSource:scripts_before_12_0 injectionTime:WKUserScriptInjectionTimeAtDocumentStart forMainFrameOnly:NO]];
+        }
+        [controller addUserScript:[[WKUserScript alloc] initWithSource:scriptsPost injectionTime:WKUserScriptInjectionTimeAtDocumentEnd forMainFrameOnly:NO]];
     }
-    if (!IS_IOS_OR_NEWER(iOS_16_0)) {
-        [controller addUserScript:[[WKUserScript alloc] initWithSource:scripts_before_16_0 injectionTime:WKUserScriptInjectionTimeAtDocumentStart forMainFrameOnly:NO]];
-    }
-    if (!IS_IOS_OR_NEWER(iOS_15_4)) {
-        [controller addUserScript:[[WKUserScript alloc] initWithSource:scripts_before_15_4 injectionTime:WKUserScriptInjectionTimeAtDocumentStart forMainFrameOnly:NO]];
-    }
-    if (!IS_IOS_OR_NEWER(iOS_13_1)) {
-        [controller addUserScript:[[WKUserScript alloc] initWithSource:scripts_before_13_1 injectionTime:WKUserScriptInjectionTimeAtDocumentStart forMainFrameOnly:NO]];
-    }
-    if (!IS_IOS_OR_NEWER(iOS_13_0)) {
-        [controller addUserScript:[[WKUserScript alloc] initWithSource:scripts_before_13_0 injectionTime:WKUserScriptInjectionTimeAtDocumentStart forMainFrameOnly:NO]];
-    }
-    if (!IS_IOS_OR_NEWER(iOS_12_0)) {
-        [controller addUserScript:[[WKUserScript alloc] initWithSource:scripts_before_12_0 injectionTime:WKUserScriptInjectionTimeAtDocumentStart forMainFrameOnly:NO]];
-    }
-    [controller addUserScript:[[WKUserScript alloc] initWithSource:scriptsPost injectionTime:WKUserScriptInjectionTimeAtDocumentEnd forMainFrameOnly:NO]];
     WKWebView *webView = %orig;
     overrideUserAgent(webView);
     return webView;
