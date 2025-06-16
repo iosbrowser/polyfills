@@ -1,6 +1,6 @@
 Package: com.ps.polyfills
 Name: Polyfills
-Version: 1.9.0
+Version: 1.9.1
 Architecture: iphoneos-arm
 Description: Injects JavaScript Polyfills to iOS web views.
 Maintainer: PoomSmart

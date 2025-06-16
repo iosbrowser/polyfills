@@ -71,6 +71,12 @@ process_js_bundle_to_header_var() {
       cp "$temp_js_transpiled" "$temp_js_minified"
     fi
 
+    # Check if the minified JS file is ES5 compatible
+    if ! npx acorn "$temp_js_minified" --ecma5 --silent; then
+      echo "Warning: Minified JS for $var_name is not ES5 compatible. Please check the output." >&2
+      # Optionally, we could still use the minified file or handle it differently
+    fi
+
     # Save a copy of the minified JS for inspection if a prefix is provided
     if [ -n "$inspection_js_save_path_prefix" ]; then
       local inspection_file_name="${inspection_js_save_path_prefix}.${var_name}.js"
