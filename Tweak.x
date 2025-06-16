@@ -2,42 +2,44 @@
 #import <HBLog.h>
 #import <PSHeader/PS.h>
 #import <WebKit/WebKit.h>
+#import <theos/IOSMacros.h>
 #import <version.h>
 #import "Polyfills.h"
 #import "Polyfills-Post.h"
 
 static NSString *getFinalUA(NSString *defaultUA) {
+    NSString *finalUA = defaultUA;
     NSString *spoofedVersion = @"16_0";
     NSString *spoofedSafariVersion = @"Version/16.0";
     NSError *regexError = nil;
     NSRegularExpression *regex = [NSRegularExpression regularExpressionWithPattern:@"OS \\d+_\\d+(?:_\\d+)?" options:0 error:&regexError];
     if (regexError) {
         HBLogDebug(@"Polyfills Regex error: %@", regexError.localizedDescription);
-        return defaultUA;
+        return finalUA;
     }
-    NSString *uaWithOS = [regex stringByReplacingMatchesInString:defaultUA options:0 range:NSMakeRange(0, defaultUA.length) withTemplate:[NSString stringWithFormat:@"OS %@", spoofedVersion]];
+    finalUA = [regex stringByReplacingMatchesInString:finalUA options:0 range:NSMakeRange(0, finalUA.length) withTemplate:[NSString stringWithFormat:@"OS %@", spoofedVersion]];
     NSRegularExpression *versionRegex = [NSRegularExpression regularExpressionWithPattern:@"Version/\\d+(\\.\\d+)*" options:0 error:nil];
-    return [versionRegex stringByReplacingMatchesInString:uaWithOS options:0 range:NSMakeRange(0, uaWithOS.length) withTemplate:spoofedSafariVersion];
+    finalUA = [versionRegex stringByReplacingMatchesInString:finalUA options:0 range:NSMakeRange(0, finalUA.length) withTemplate:spoofedSafariVersion];
+    finalUA = [finalUA stringByReplacingOccurrencesOfString:@"iPod touch" withString:@"iPhone"];
+    return finalUA;
+}
+
+static void setUserAgent(WKWebView *webView, NSString *userAgent) {
+    if (!userAgent) return;
+    if ([webView respondsToSelector:@selector(setCustomUserAgent:)])
+        webView.customUserAgent = userAgent;
+    else {
+        NSUserDefaults *defaults = [NSUserDefaults standardUserDefaults];
+        [defaults registerDefaults:@{@"UserAgent": userAgent}];
+    }
 }
 
 static void overrideUserAgent(WKWebView *webView) {
     if (IS_IOS_OR_NEWER(iOS_16_0)) return;
-    __block NSString *finalUA = nil;
-    __block BOOL finished = NO;
-    [webView evaluateJavaScript:@"navigator.userAgent" completionHandler:^(id result, NSError *error) {
-        if (error || ![result isKindOfClass:[NSString class]]) {
-            HBLogDebug(@"Polyfills Failed to get user agent: %@", error.localizedDescription);
-            finished = YES;
-            return;
-        }
-        NSString *defaultUA = (NSString *)result;
-        finalUA = getFinalUA(defaultUA);
-        finished = YES;
-    }];
-    while (!finished)
-        [[NSRunLoop currentRunLoop] runMode:NSDefaultRunLoopMode beforeDate:[NSDate distantFuture]];
-    if (finalUA)
-        webView.customUserAgent = finalUA;
+    NSString *ua = IS_IPAD
+        ? @"Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.0 Safari/605.1.15"
+        : @"Mozilla/5.0 (iPhone; CPU iPhone OS 16_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.0 Mobile/15E148 Safari/604.1";
+    setUserAgent(webView, ua);
 }
 
 %hook WKWebView
@@ -76,12 +78,9 @@ static const void *InjectedKey = &InjectedKey;
         }
         [controller addUserScript:[[WKUserScript alloc] initWithSource:scriptsPost injectionTime:WKUserScriptInjectionTimeAtDocumentEnd forMainFrameOnly:NO]];
     }
-    return %orig;
-}
-
-- (void)_didCommitLoadForMainFrame {
-    %orig;
-    overrideUserAgent(self);
+    WKWebView *webView = %orig;
+    overrideUserAgent(webView);
+    return webView;
 }
 
 - (void)setCustomUserAgent:(NSString *)customUserAgent {

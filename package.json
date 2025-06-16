@@ -16,9 +16,7 @@
   "devDependencies": {
     "@babel/cli": "^7.27.2",
     "@babel/core": "^7.27.4",
-    "@babel/plugin-transform-arrow-functions": "^7.27.1",
-    "@babel/plugin-transform-block-scoping": "^7.27.1",
-    "@babel/plugin-transform-nullish-coalescing-operator": "^7.27.1",
+    "@babel/preset-env": "^7.27.1",
     "acorn": "8.15.0",
     "uglify-js": "^3.19.3"
   }
