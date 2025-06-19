@@ -7,6 +7,12 @@
 #import "Polyfills.h"
 #import "Polyfills-Post.h"
 
+@interface _SFReloadOptionsController : NSObject
+@end
+
+static NSString *mobileUserAgent = @"Mozilla/5.0 (iPhone; CPU iPhone OS 16_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.0 Mobile/15E148 Safari/604.1";
+static NSString *desktopUserAgent = @"Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.0 Safari/605.1.15";
+
 static NSString *getFinalUA(NSString *defaultUA) {
     NSString *finalUA = defaultUA;
     NSString *spoofedVersion = @"16_0";
@@ -36,9 +42,13 @@ static void setUserAgent(WKWebView *webView, NSString *userAgent) {
 
 static void overrideUserAgent(WKWebView *webView) {
     if (IS_IOS_OR_NEWER(iOS_16_0)) return;
-    NSString *ua = IS_IPAD
-        ? @"Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.0 Safari/605.1.15"
-        : @"Mozilla/5.0 (iPhone; CPU iPhone OS 16_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.0 Mobile/15E148 Safari/604.1";
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wunguarded-availability-new"
+    WKContentMode contentMode = WKContentModeRecommended;
+    if (IS_IOS_OR_NEWER(iOS_13_0))
+        contentMode = webView.configuration.defaultWebpagePreferences.preferredContentMode;
+    NSString *ua = IS_IPAD || contentMode == WKContentModeDesktop ? desktopUserAgent : mobileUserAgent;
+#pragma clang diagnostic pop
     setUserAgent(webView, ua);
 }
 
@@ -55,6 +65,18 @@ static const void *InjectedKey = &InjectedKey;
     if (!objc_getAssociatedObject(controller, InjectedKey)) {
         objc_setAssociatedObject(controller, InjectedKey, @YES, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
         [controller addUserScript:[[WKUserScript alloc] initWithSource:scripts injectionTime:WKUserScriptInjectionTimeAtDocumentStart forMainFrameOnly:NO]];
+        if (!IS_IOS_OR_NEWER(iOS_9_0)) {
+            [controller addUserScript:[[WKUserScript alloc] initWithSource:scripts_before_9_0 injectionTime:WKUserScriptInjectionTimeAtDocumentStart forMainFrameOnly:NO]];
+        }
+        if (!IS_IOS_OR_NEWER(iOS_10_0)) {
+            [controller addUserScript:[[WKUserScript alloc] initWithSource:scripts_before_10_0 injectionTime:WKUserScriptInjectionTimeAtDocumentStart forMainFrameOnly:NO]];
+        }
+        if (!IS_IOS_OR_NEWER(iOS_10_1)) {
+            [controller addUserScript:[[WKUserScript alloc] initWithSource:scripts_before_10_1 injectionTime:WKUserScriptInjectionTimeAtDocumentStart forMainFrameOnly:NO]];
+        }
+        if (!IS_IOS_OR_NEWER(iOS_11_1)) {
+            [controller addUserScript:[[WKUserScript alloc] initWithSource:scripts_before_11_1 injectionTime:WKUserScriptInjectionTimeAtDocumentStart forMainFrameOnly:NO]];
+        }
         if (!IS_IOS_OR_NEWER(iOS_12_0)) {
             [controller addUserScript:[[WKUserScript alloc] initWithSource:scripts_before_12_0 injectionTime:WKUserScriptInjectionTimeAtDocumentStart forMainFrameOnly:NO]];
         }
@@ -84,7 +106,35 @@ static const void *InjectedKey = &InjectedKey;
 }
 
 - (void)setCustomUserAgent:(NSString *)customUserAgent {
+    HBLogDebug(@"Polyfills Setting custom user agent: %@", customUserAgent);
     %orig(getFinalUA(customUserAgent));
+}
+
+- (void)setApplicationNameForUserAgent:(NSString *)applicationNameForUserAgent {
+    HBLogDebug(@"Polyfills Setting application name for user agent: %@", applicationNameForUserAgent);
+    %orig(getFinalUA(applicationNameForUserAgent));
+}
+
+%end
+
+%hook _SFReloadOptionsController
+
+- (void)didMarkURLAsNeedingDesktopUserAgent:(id)arg1 {
+    if (!IS_IOS_OR_NEWER(iOS_16_0)) {
+        HBLogDebug(@"Polyfills didMarkURLAsNeedingDesktopUserAgent called");
+        WKWebView *webView = [self valueForKey:@"_webView"];
+        if (webView) setUserAgent(webView, desktopUserAgent);
+    }
+    %orig;
+}
+
+- (void)didMarkURLAsNeedingStandardUserAgent:(id)arg1 {
+    if (!IS_IOS_OR_NEWER(iOS_16_0)) {
+        HBLogDebug(@"Polyfills didMarkURLAsNeedingStandardUserAgent called");
+        WKWebView *webView = [self valueForKey:@"_webView"];
+        if (webView) setUserAgent(webView, mobileUserAgent);
+    }
+    %orig;
 }
 
 %end
