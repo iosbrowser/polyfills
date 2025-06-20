@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>title</key>
+    <string>Polyfills</string>
+	<key>entry</key>
+	<dict>
+        <key>cell</key>
+        <string>PSLinkCell</string>
+        <key>icon</key>
+        <string>Polyfills.png</string>
+        <key>label</key>
+        <string>Polyfills</string>
+    </dict>
+    <key>items</key>
+    <array>
+        <dict>
+            <key>cell</key>
+            <string>PSSwitchCell</string>
+            <key>defaults</key>
+            <string>com.apple.UIKit</string>
+            <key>label</key>
+            <string>Enabled</string>
+            <key>key</key>
+            <string>PolyfillsEnabled</string>
+            <key>default</key>
+            <true/>
+        </dict>
+        <dict>
+            <key>cell</key>
+            <string>PSGroupCell</string>
+            <key>footerAlignment</key>
+            <integer>1</integer>
+            <key>footerText</key>
+            <string>© 2025 PoomSmart</string>
+        </dict>
+    </array>
+</dict>
+</plist>

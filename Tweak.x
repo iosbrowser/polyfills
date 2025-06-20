@@ -7,6 +7,9 @@
 #import "Polyfills.h"
 #import "Polyfills-Post.h"
 
+#define domain CFSTR("com.apple.UIKit")
+#define key CFSTR("PolyfillsEnabled")
+
 @interface _SFReloadOptionsController : NSObject
 @end
 
@@ -141,5 +144,8 @@ static const void *InjectedKey = &InjectedKey;
 
 %ctor {
     if (!isTarget(TargetTypeApps)) return;
+    Boolean keyExists;
+    Boolean enabled = CFPreferencesGetAppBooleanValue(key, domain, &keyExists);
+    if (!keyExists ? NO : !enabled) return;
     %init;
 }
