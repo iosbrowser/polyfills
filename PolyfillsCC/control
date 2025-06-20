@@ -1,0 +1,9 @@
+Package: com.ps.polyfillscc
+Name: Polyfills CC Toggle
+Depends: firmware (>= 11.0), com.opa334.ccsupport, com.ps.polyfills (>= 1.11.0)
+Version: 1.0.0
+Architecture: iphoneos-arm
+Description: Control Center toggle for Polyfills tweak.
+Author: PoomSmart
+Maintainer: PoomSmart
+Section: Tweaks

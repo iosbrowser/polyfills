@@ -4,11 +4,9 @@
 #import <WebKit/WebKit.h>
 #import <theos/IOSMacros.h>
 #import <version.h>
+#import "Header.h"
 #import "Polyfills.h"
 #import "Polyfills-Post.h"
-
-#define domain CFSTR("com.apple.UIKit")
-#define key CFSTR("PolyfillsEnabled")
 
 @interface _SFReloadOptionsController : NSObject
 @end
