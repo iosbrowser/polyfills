@@ -119,20 +119,6 @@
         document.head.appendChild(style);
     }
 
-    // Reload <link> with crossorigin=anonymous to try gaining access to cssRules
-    function reloadCrossOriginStylesheet(link) {
-        return new Promise((resolve, reject) => {
-            const newLink = document.createElement('link');
-            newLink.rel = 'stylesheet';
-            newLink.href = link.href;
-            newLink.crossOrigin = 'anonymous';
-            newLink.onload = () => resolve(newLink);
-            newLink.onerror = reject;
-            link.parentNode.insertBefore(newLink, link.nextSibling);
-            link.remove();
-        });
-    }
-
     async function fetchAndInlineStylesheet(href) {
         try {
             const res = await fetch(href, { mode: 'cors' });
@@ -167,37 +153,6 @@
                     await fetchAndInlineStylesheet(sheet.href);
                     continue;
                 }
-
-                // Cross-origin: try fetch first
-                const fetched = await fetchAndInlineStylesheet(sheet.href);
-                if (fetched) continue;
-
-                // Fetch failed (CSP, network), try reload with crossorigin
-                if (!link.crossOrigin) {
-                    try {
-                        const reloaded = await reloadCrossOriginStylesheet(link);
-                        // Wait for new stylesheet to be parsed
-                        await new Promise(r => setTimeout(r, 100)); // small delay
-
-                        // Access cssRules if possible
-                        const newSheet = Array.from(document.styleSheets).find(
-                            s => s.href === reloaded.href
-                        );
-                        if (newSheet) {
-                            try {
-                                const cssText = Array.from(newSheet.cssRules)
-                                    .map(rule => rule.cssText)
-                                    .join('\n');
-                                const cleaned = cleanCSS(cssText);
-                                injectStyle(cleaned);
-                            } catch (e) {
-                                console.warn(`❌ Still can’t access cssRules for ${reloaded.href}`, e);
-                            }
-                        }
-                    } catch (reloadErr) {
-                        console.warn(`❌ Reload with crossorigin failed for ${link.href}`, reloadErr);
-                    }
-                }
             } else if (
                 sheet.ownerNode &&
                 sheet.ownerNode.tagName === 'STYLE' &&
@@ -210,16 +165,5 @@
         }
     }
 
-    // Run after a 2-second delay, or when document is complete (whichever is later)
-    function runPolyfill() {
-        setTimeout(() => {
-            processStyleSheets();
-        }, 2000);
-    }
-
-    if (document.readyState === 'complete') {
-        runPolyfill();
-    } else {
-        window.addEventListener('load', runPolyfill);
-    }
+    processStyleSheets();
 })();
