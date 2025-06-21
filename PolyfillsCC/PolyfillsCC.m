@@ -1,12 +1,9 @@
-#include <CoreFoundation/CFNumber.h>
 #import <CoreFoundation/CoreFoundation.h>
 #import <Foundation/Foundation.h>
 #import "PolyfillsCC.h"
 #import "../Header.h"
 
 @implementation PolyfillsCC
-
-#pragma mark - Non-CAML approach
 
 - (UIImage *)iconGlyph {
     return [UIImage imageNamed:@"icon" inBundle:[NSBundle bundleForClass:[self class]] compatibleWithTraitCollection:nil];
