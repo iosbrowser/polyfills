@@ -100,6 +100,12 @@ static const void *InjectedKey = &InjectedKey;
             [controller addUserScript:[[WKUserScript alloc] initWithSource:scripts_before_16_4 injectionTime:WKUserScriptInjectionTimeAtDocumentStart forMainFrameOnly:NO]];
         }
         [controller addUserScript:[[WKUserScript alloc] initWithSource:scriptsPost injectionTime:WKUserScriptInjectionTimeAtDocumentEnd forMainFrameOnly:NO]];
+        if (!IS_IOS_OR_NEWER(iOS_15_4)) {
+            [controller addUserScript:[[WKUserScript alloc] initWithSource:scriptsPost_before_15_4 injectionTime:WKUserScriptInjectionTimeAtDocumentEnd forMainFrameOnly:NO]];
+        }
+        if (!IS_IOS_OR_NEWER(iOS_16_4)) {
+            [controller addUserScript:[[WKUserScript alloc] initWithSource:scriptsPost_before_16_4 injectionTime:WKUserScriptInjectionTimeAtDocumentEnd forMainFrameOnly:NO]];
+        }
     }
     WKWebView *webView = %orig;
     overrideUserAgent(webView);

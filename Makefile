@@ -28,8 +28,6 @@ headers:
 	@./generate_polyfill_header.sh scripts Polyfills scripts
 	@./generate_polyfill_header.sh scripts-post Polyfills-Post scriptsPost
 
-before-all:: headers
-
 ifeq ($(SIMULATOR),1)
 setup:: clean all
 	@rm -f /opt/simject/$(TWEAK_NAME).dylib

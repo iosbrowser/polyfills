@@ -25,6 +25,7 @@ The scripts may be put under a folder named after the specific iOS version, such
 
 ```sh
 npm install
+make headers
 make
 ```
 

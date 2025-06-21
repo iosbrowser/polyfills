@@ -1,4 +1,4 @@
-HTMLDialogElement = String;
+if (typeof HTMLDialogElement === 'undefined') HTMLDialogElement = String;
 
 if (!Element.prototype._originalMatches) {
     Element.prototype._originalMatches = Element.prototype.matches;
