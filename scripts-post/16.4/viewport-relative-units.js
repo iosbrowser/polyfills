@@ -1,4 +1,8 @@
+// ChatGPT
 (function () {
+  if (window.__viewportUnitPolyfillApplied) return;
+  window.__viewportUnitPolyfillApplied = true;
+
   const UNIT_MAP = {
     dvh: 'vh', svh: 'vh', lvh: 'vh',
     dvw: 'vw', svw: 'vw', lvw: 'vw',

@@ -1,4 +1,8 @@
+// ChatGPT
 (function polyfillCSSLayer() {
+    if (window.__cssLayersPolyfillApplied) return;
+    window.__cssLayersPolyfillApplied = true;
+
     // Parsing utilities
     function cleanCSS(css) {
         return parseBlocks(css).join('');
@@ -15,19 +19,22 @@
                 buffer = '';
 
                 i += 6;
-                while (/\s/.test(css[i])) i++;
-                while (/[a-zA-Z0-9_.-]/.test(css[i])) i++;
-                while (/\s/.test(css[i])) i++;
+                // Safe character skipping with bounds checking
+                while (i < css.length && /\s/.test(css[i])) i++;
+                while (i < css.length && /[a-zA-Z0-9_.-]/.test(css[i])) i++;
+                while (i < css.length && /\s/.test(css[i])) i++;
 
-                if (css[i] === '{') {
+                if (i < css.length && css[i] === '{') {
                     const { blockContent, endIndex } = extractBlock(css, i);
                     const inner = parseBlocks(blockContent).join('');
                     output.push(inner);
                     i = endIndex;
                     continue;
                 } else {
+                    // If we can't find '{', treat as regular text and continue safely
                     buffer += '@layer';
-                    continue;
+                    if (i >= css.length) break;
+                    // Don't continue without incrementing i
                 }
             }
 
@@ -70,13 +77,18 @@
         i++; // skip initial {
         const blockStart = i;
 
-        while (i < maxLen) {
+        // Add iteration limit as safety measure
+        let iterations = 0;
+        const maxIterations = maxLen * 2; // Reasonable upper bound
+
+        while (i < maxLen && iterations < maxIterations) {
             if (css[i] === '{') depth++;
             else if (css[i] === '}') {
                 if (depth === 0) break;
                 depth--;
             }
             i++;
+            iterations++;
         }
 
         if (i >= maxLen) {
@@ -84,6 +96,14 @@
             return {
                 blockContent: css.slice(blockStart),
                 endIndex: maxLen
+            };
+        }
+
+        if (iterations >= maxIterations) {
+            console.warn('⚠️ CSS parsing iteration limit reached, possible infinite loop prevented');
+            return {
+                blockContent: css.slice(blockStart, i),
+                endIndex: i
             };
         }
 
@@ -190,6 +210,16 @@
         }
     }
 
-    // Run immediately (injected at document end)
-    processStyleSheets();
+    // Run after a 2-second delay, or when document is complete (whichever is later)
+    function runPolyfill() {
+        setTimeout(() => {
+            processStyleSheets();
+        }, 2000);
+    }
+
+    if (document.readyState === 'complete') {
+        runPolyfill();
+    } else {
+        window.addEventListener('load', runPolyfill);
+    }
 })();
