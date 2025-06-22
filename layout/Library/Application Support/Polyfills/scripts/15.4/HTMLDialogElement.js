@@ -1,1 +1,1 @@
-"use strict";if(typeof HTMLDialogElement==="undefined")HTMLDialogElement=String;
+"use strict";if(typeof HTMLDialogElement==="undefined")window.HTMLDialogElement=String;

@@ -1,1 +1,1 @@
-if (typeof HTMLDialogElement === 'undefined') HTMLDialogElement = String;
+if (typeof HTMLDialogElement === 'undefined') window.HTMLDialogElement = String;
