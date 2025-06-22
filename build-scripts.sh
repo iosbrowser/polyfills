@@ -98,6 +98,9 @@ if [ -d "$SOURCE_SCRIPTS" ]; then
             echo "  Moved $(basename "$js_file") to base folder"
         fi
     done
+
+    # Remove disabled files
+    find "$TARGET_BASE/scripts" -name "*.disabled" -delete 2>/dev/null || true
 fi
 
 # Copy scripts-post directory structure first

@@ -75,7 +75,7 @@ static NSString *loadJSFromDirectory(NSString *directoryPath) {
     }
 
     // Filter for .js files and sort them
-    NSArray *jsFiles = [[files filteredArrayUsingPredicate:[NSPredicate predicateWithFormat:@"pathExtension == 'js'"]] 
+    NSArray *jsFiles = [[files filteredArrayUsingPredicate:[NSPredicate predicateWithFormat:@"pathExtension == 'js'"]]
                        sortedArrayUsingSelector:@selector(localizedCaseInsensitiveCompare:)];
 
     NSMutableString *combinedScript = [NSMutableString string];
@@ -96,14 +96,12 @@ static NSString *getPolyfillsBasePath() {
     return PS_ROOT_PATH_NS(@"/Library/Application Support/Polyfills");
 }
 
-// Global variables to cache loaded scripts
-static NSString *cachedMainScripts = nil;
-static NSString *cachedPostScripts = nil;
-static BOOL scriptsLoaded = NO;
+// Global variables for script loading
 static dispatch_queue_t scriptLoadingQueue;
 
 // Helper function to load scripts for a specific iOS version or older
-static NSString *loadScriptsForIOSVersion(NSString *basePath, NSInteger majorVersion, NSInteger minorVersion, BOOL isPost) {
+// If injectionCallback is provided, scripts are injected immediately as they're loaded
+static NSString *loadScriptsForIOSVersion(NSString *basePath, BOOL isPost, void (^injectionCallback)(NSString *script, BOOL isPost)) {
     NSString *scriptsDir = isPost ? @"scripts-post" : @"scripts";
     NSString *fullBasePath = [basePath stringByAppendingPathComponent:scriptsDir];
 
@@ -113,6 +111,9 @@ static NSString *loadScriptsForIOSVersion(NSString *basePath, NSInteger majorVer
     NSString *baseScriptsPath = [fullBasePath stringByAppendingPathComponent:@"base"];
     NSString *baseScripts = loadJSFromDirectory(baseScriptsPath);
     if (baseScripts.length > 0) {
+        if (injectionCallback) {
+            injectionCallback(baseScripts, isPost);
+        }
         [combinedScripts appendString:baseScripts];
         [combinedScripts appendString:@"\n"];
     }
@@ -173,6 +174,9 @@ static NSString *loadScriptsForIOSVersion(NSString *basePath, NSInteger majorVer
             NSString *versionPath = [fullBasePath stringByAppendingPathComponent:versionStr];
             NSString *versionScripts = loadJSFromDirectory(versionPath);
             if (versionScripts.length > 0) {
+                if (injectionCallback) {
+                    injectionCallback(versionScripts, isPost);
+                }
                 [combinedScripts appendString:versionScripts];
                 [combinedScripts appendString:@"\n"];
             }
@@ -180,32 +184,6 @@ static NSString *loadScriptsForIOSVersion(NSString *basePath, NSInteger majorVer
     }
 
     return [combinedScripts copy];
-}
-
-// Async function to load and cache all scripts
-static void loadAllScriptsAsync() {
-    dispatch_async(scriptLoadingQueue, ^{
-        @autoreleasepool {
-            NSString *polyfillsBasePath = getPolyfillsBasePath();
-
-            // Load main scripts (injected at document start)
-            NSString *mainScripts = loadScriptsForIOSVersion(polyfillsBasePath, 0, 0, NO);
-
-            // Load post scripts (injected at document end)
-            NSString *postScripts = loadScriptsForIOSVersion(polyfillsBasePath, 0, 0, YES);
-
-            // Cache the results on main queue
-            dispatch_async(dispatch_get_main_queue(), ^{
-                cachedMainScripts = [mainScripts copy];
-                cachedPostScripts = [postScripts copy];
-                scriptsLoaded = YES;
-
-                HBLogDebug(@"Polyfills: Scripts loaded asynchronously - Main: %lu chars, Post: %lu chars",
-                          (unsigned long)cachedMainScripts.length,
-                          (unsigned long)cachedPostScripts.length);
-            });
-        }
-    });
 }
 
 static NSString *mobileUserAgent = @"Mozilla/5.0 (iPhone; CPU iPhone OS 16_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.0 Mobile/15E148 Safari/604.1";
@@ -250,6 +228,39 @@ static void overrideUserAgent(WKWebView *webView) {
     setUserAgent(webView, ua);
 }
 
+// Function to load and inject scripts immediately as they're loaded
+static void loadAndInjectScriptsImmediately(WKUserContentController *controller) {
+    NSString *polyfillsBasePath = getPolyfillsBasePath();
+
+    void (^injectionCallback)(NSString *, BOOL) = ^(NSString *script, BOOL isPost) {
+        dispatch_async(dispatch_get_main_queue(), ^{
+            if (script.length > 0 && controller) {
+                WKUserScriptInjectionTime injectionTime = isPost ?
+                    WKUserScriptInjectionTimeAtDocumentEnd :
+                    WKUserScriptInjectionTimeAtDocumentStart;
+
+                [controller addUserScript:[[WKUserScript alloc] initWithSource:script
+                                                                  injectionTime:injectionTime
+                                                               forMainFrameOnly:NO]];
+
+                HBLogDebug(@"Polyfills: Injected %@ script (%lu chars)",
+                          isPost ? @"post" : @"main", (unsigned long)script.length);
+            }
+        });
+    };
+
+    // Load and inject scripts immediately as they're loaded
+    dispatch_async(scriptLoadingQueue, ^{
+        @autoreleasepool {
+            // Load main scripts with immediate injection
+            loadScriptsForIOSVersion(polyfillsBasePath, NO, injectionCallback);
+
+            // Load post scripts with immediate injection
+            loadScriptsForIOSVersion(polyfillsBasePath, YES, injectionCallback);
+        }
+    });
+}
+
 %hook WKWebView
 
 static const void *InjectedKey = &InjectedKey;
@@ -263,62 +274,8 @@ static const void *InjectedKey = &InjectedKey;
     if (!objc_getAssociatedObject(controller, InjectedKey)) {
         objc_setAssociatedObject(controller, InjectedKey, @YES, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
 
-        // If scripts are already loaded, inject them immediately
-        if (scriptsLoaded) {
-            if (cachedMainScripts.length > 0) {
-                [controller addUserScript:[[WKUserScript alloc] initWithSource:cachedMainScripts
-                                                                  injectionTime:WKUserScriptInjectionTimeAtDocumentStart
-                                                               forMainFrameOnly:NO]];
-            }
-
-            if (cachedPostScripts.length > 0) {
-                [controller addUserScript:[[WKUserScript alloc] initWithSource:cachedPostScripts
-                                                                  injectionTime:WKUserScriptInjectionTimeAtDocumentEnd
-                                                               forMainFrameOnly:NO]];
-            }
-        } else {
-            // Scripts not loaded yet, wait briefly then inject
-            __weak WKUserContentController *weakController = controller;
-            dispatch_async(dispatch_get_main_queue(), ^{
-                // Give async loading a moment, then check again
-                dispatch_after(dispatch_time(DISPATCH_TIME_NOW, 0.1 * NSEC_PER_SEC), dispatch_get_main_queue(), ^{
-                    if (scriptsLoaded && weakController) {
-                        if (cachedMainScripts.length > 0) {
-                            [weakController addUserScript:[[WKUserScript alloc] initWithSource:cachedMainScripts
-                                                                              injectionTime:WKUserScriptInjectionTimeAtDocumentStart
-                                                                           forMainFrameOnly:NO]];
-                        }
-
-                        if (cachedPostScripts.length > 0) {
-                            [weakController addUserScript:[[WKUserScript alloc] initWithSource:cachedPostScripts
-                                                                              injectionTime:WKUserScriptInjectionTimeAtDocumentEnd
-                                                                           forMainFrameOnly:NO]];
-                        }
-
-                        HBLogDebug(@"Polyfills: Scripts injected after brief delay");
-                    } else if (weakController) {
-                        // Still not loaded, fall back to sync loading
-                        HBLogDebug(@"Polyfills: Falling back to synchronous script loading");
-
-                        NSString *polyfillsBasePath = getPolyfillsBasePath();
-
-                        NSString *mainScripts = loadScriptsForIOSVersion(polyfillsBasePath, 0, 0, NO);
-                        if (mainScripts.length > 0) {
-                            [weakController addUserScript:[[WKUserScript alloc] initWithSource:mainScripts
-                                                                              injectionTime:WKUserScriptInjectionTimeAtDocumentStart 
-                                                                           forMainFrameOnly:NO]];
-                        }
-
-                        NSString *postScripts = loadScriptsForIOSVersion(polyfillsBasePath, 0, 0, YES);
-                        if (postScripts.length > 0) {
-                            [weakController addUserScript:[[WKUserScript alloc] initWithSource:postScripts
-                                                                              injectionTime:WKUserScriptInjectionTimeAtDocumentEnd 
-                                                                           forMainFrameOnly:NO]];
-                        }
-                    }
-                });
-            });
-        }
+        // Always use immediate injection for best performance
+        loadAndInjectScriptsImmediately(controller);
     }
     WKWebView *webView = %orig;
     overrideUserAgent(webView);
@@ -367,9 +324,6 @@ static const void *InjectedKey = &InjectedKey;
 
     // Create queue for async script loading
     scriptLoadingQueue = dispatch_queue_create("com.polyfills.scriptloading", DISPATCH_QUEUE_SERIAL);
-
-    // Start loading scripts asynchronously
-    loadAllScriptsAsync();
 
     %init;
 }
