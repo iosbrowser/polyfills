@@ -316,6 +316,18 @@ static const void *InjectedKey = &InjectedKey;
 
 %end
 
+%hook NSRegularExpression
+
+- (void)enumerateMatchesInString:(NSString *)string options:(NSMatchingOptions)options range:(NSRange)range usingBlock:(void (^)(NSTextCheckingResult *result, NSMatchingFlags flags, BOOL *stop))block {
+    if (!string) {
+        HBLogDebug(@"Polyfills: Skipping regex match enumeration for empty string");
+        return;
+    }
+    %orig(string, options, range, block);
+}
+
+%end
+
 %ctor {
     if (!isTarget(TargetTypeApps)) return;
     Boolean keyExists;
