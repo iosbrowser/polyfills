@@ -168,7 +168,7 @@
 
     // Patch RegExp constructor
     function PatchedRegExp(pattern, flags) {
-        const patternStr = typeof pattern === 'string' ? pattern : pattern.source;
+        const patternStr = typeof pattern === 'string' ? pattern : (pattern ? pattern.source : "");
         const flagsStr = flags ?? (pattern && pattern.flags) ?? "";
 
         if (!containsLookbehind(patternStr)) {
