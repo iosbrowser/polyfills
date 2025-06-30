@@ -1,0 +1,1 @@
+"use strict";if(!("description"in Symbol.prototype)){Object.defineProperty(Symbol.prototype,"description",{get:function get(){return/\((.+)\)/.exec(this)[1]}})}

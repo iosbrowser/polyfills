@@ -1,0 +1,1 @@
+"use strict";if(!("finally"in Promise.prototype)){Promise.prototype.finally=function(t){if("function"!=typeof t)return this.then(t,t);var e=this.constructor||Promise;return this.then(function(o){return e.resolve(t()).then(function(){return o})},function(o){return e.resolve(t()).then(function(){throw o})})}}

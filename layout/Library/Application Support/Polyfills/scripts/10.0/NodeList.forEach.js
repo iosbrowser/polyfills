@@ -1,1 +1,1 @@
-"use strict";if("NodeList"in window&&!NodeList.prototype.forEach){NodeList.prototype.forEach=function(callback,thisArg){thisArg=thisArg||window;for(var i=0;i<this.length;i++){callback.call(thisArg,this[i],i,this)}}}
+"use strict";if(!("forEach"in NodeList.prototype))NodeList.prototype.forEach=[].forEach;
