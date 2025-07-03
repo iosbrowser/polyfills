@@ -26,7 +26,6 @@ The scripts may be put under a folder named after the specific iOS version, such
 ```sh
 npm install
 ./build-scripts.sh   # Build and optimize JavaScript polyfills
-make headers
 make
 ```
 
