@@ -186,13 +186,13 @@ static NSString *loadScriptsForIOSVersion(NSString *basePath, BOOL isPost, void 
     return [combinedScripts copy];
 }
 
-static NSString *mobileUserAgent = @"Mozilla/5.0 (iPhone; CPU iPhone OS 16_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.0 Mobile/15E148 Safari/604.1";
-static NSString *desktopUserAgent = @"Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.0 Safari/605.1.15";
+static NSString *mobileUserAgent = @"Mozilla/5.0 (iPhone; CPU iPhone OS 16_3 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.3 Mobile/15E148 Safari/604.1.36";
+static NSString *desktopUserAgent = @"Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.3 Safari/605.1.15";
 
 static NSString *getFinalUA(NSString *defaultUA) {
     NSString *finalUA = defaultUA;
-    NSString *spoofedVersion = @"16_0";
-    NSString *spoofedSafariVersion = @"Version/16.0";
+    NSString *spoofedVersion = @"16_3";
+    NSString *spoofedSafariVersion = @"Version/16.3";
     NSError *regexError = nil;
     NSRegularExpression *regex = [NSRegularExpression regularExpressionWithPattern:@"OS \\d+_\\d+(?:_\\d+)?" options:0 error:&regexError];
     if (regexError) {
@@ -217,7 +217,7 @@ static void setUserAgent(WKWebView *webView, NSString *userAgent) {
 }
 
 static void overrideUserAgent(WKWebView *webView) {
-    if (isIOSVersionOrNewer(16, 0)) return;
+    if (isIOSVersionOrNewer(16, 3)) return;
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wunguarded-availability-new"
     WKContentMode contentMode = WKContentModeRecommended;
@@ -297,7 +297,7 @@ static const void *InjectedKey = &InjectedKey;
 %hook _SFReloadOptionsController
 
 - (void)didMarkURLAsNeedingDesktopUserAgent:(id)arg1 {
-    if (!isIOSVersionOrNewer(16, 0)) {
+    if (!isIOSVersionOrNewer(16, 3)) {
         HBLogDebug(@"Polyfills didMarkURLAsNeedingDesktopUserAgent called");
         WKWebView *webView = [self valueForKey:@"_webView"];
         if (webView) setUserAgent(webView, desktopUserAgent);
@@ -306,7 +306,7 @@ static const void *InjectedKey = &InjectedKey;
 }
 
 - (void)didMarkURLAsNeedingStandardUserAgent:(id)arg1 {
-    if (!isIOSVersionOrNewer(16, 0)) {
+    if (!isIOSVersionOrNewer(16, 3)) {
         HBLogDebug(@"Polyfills didMarkURLAsNeedingStandardUserAgent called");
         WKWebView *webView = [self valueForKey:@"_webView"];
         if (webView) setUserAgent(webView, mobileUserAgent);
