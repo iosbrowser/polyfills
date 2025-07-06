@@ -1,3 +1,4 @@
+// Modified version via Claude
 /**
  @class BroadcastChannel
  A simple BroadcastChannel polyfill that works with all major browsers.
@@ -31,29 +32,33 @@
     // Internal variables
     let _channels = null; // List of channels
     let _tabId = null; // Current window browser tab identifier (see IE problem, later)
-    const _prefix = 'polyBC_'; // prefix to identify localStorage keys.
+    let _storageListener = null; // Store reference to the storage listener
+    const _prefix = "polyBC_"; // prefix to identify localStorage keys.
 
     /**
      * Utils
      * @private
      */
     const getRandomString = (len = 5) => {
-        let text = '';
-        const possible = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
+        let text = "";
+        const possible =
+            "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
         for (let i = 0; i < len; i++) {
-            text += possible.charAt(Math.floor(Math.random() * possible.length));
+            text += possible.charAt(
+                Math.floor(Math.random() * possible.length)
+            );
         }
         return text;
     };
 
-    const isEmpty = obj => !Object.keys(obj).length;
+    const isEmpty = (obj) => !Object.keys(obj).length;
 
-    const getTimestamp = () => (new Date()).getTime();
+    const getTimestamp = () => new Date().getTime();
 
     /**
      * Build a "similar" response as done in the real BroadcastChannel API
      */
-    const buildResponse = data => {
+    const buildResponse = (data) => {
         return {
             timestamp: getTimestamp(),
             isTrusted: true,
@@ -63,8 +68,8 @@
             bubbles: false,
             cancelable: false,
             defaultPrevented: false,
-            lastEventId: '',
-            origin: context.location.origin
+            lastEventId: "",
+            origin: context.location.origin,
         };
     };
 
@@ -74,7 +79,7 @@
      * @param {Object} ev - the message.
      * @private
      */
-    const _onmsg = ev => {
+    const _onmsg = (ev) => {
         const key = ev.key;
         const newValue = ev.newValue;
         const isRemoved = !newValue;
@@ -82,25 +87,53 @@
 
         // Actually checks if the messages if from us.
         if (key.indexOf(`${_prefix}message_`) > -1 && !isRemoved) {
-
             try {
                 obj = JSON.parse(newValue);
             } catch (ex) {
-                throw 'Message conversion has resulted in an error.';
+                // Handle JSON parsing errors by dispatching messageerror events
+                if (_channels) {
+                    Object.values(_channels).forEach((subscribers) => {
+                        subscribers.forEach((sub) => {
+                            if (!sub.closed) {
+                                const errorEvent = new CustomEvent(
+                                    "messageerror",
+                                    {
+                                        detail: {
+                                            data: newValue,
+                                            origin: context.location.origin,
+                                            error: ex,
+                                        },
+                                    }
+                                );
+                                sub.dispatchEvent(errorEvent);
+                                // Also call onmessageerror if set
+                                if (typeof sub.onmessageerror === "function") {
+                                    sub.onmessageerror(errorEvent);
+                                }
+                            }
+                        });
+                    });
+                }
+                return;
             }
 
             // NOTE: Check on tab is done to prevent IE error
             // (localStorage event is called even in the same tab :( )
-            if ((obj.tabId !== _tabId) &&
+            if (
+                obj.tabId !== _tabId &&
                 obj.channelId &&
                 _channels &&
-                _channels[obj.channelId]) {
-
+                _channels[obj.channelId]
+            ) {
                 const subscribers = _channels[obj.channelId];
-                subscribers.forEach(sub => {
+                subscribers.forEach((sub) => {
                     if (!sub.closed) {
-                        const event = new CustomEvent('message', obj.message);
+                        const event = new CustomEvent("message", obj.message);
                         sub.dispatchEvent(event);
+                        // Also call onmessage if set
+                        if (typeof sub.onmessage === "function") {
+                            sub.onmessage(event);
+                        }
                     }
                 });
                 // Remove the item for safety.
@@ -115,25 +148,31 @@
      * return {BroadcastChannel}
      */
     class _BroadcastChannel extends EventTarget {
-
-        channelId = '';
-        channelName = '';
-        name = '';
+        channelId = "";
+        channelName = "";
         closed = false;
+        _onmessage = null;
+        _onmessageerror = null;
+        _instanceId = "";
 
-        constructor(channelName = '') {
+        constructor(channelName = "") {
             super();
+
+            // Validate channel name
+            if (typeof channelName !== "string") {
+                throw new TypeError("Channel name must be a string");
+            }
 
             this.channelName = channelName;
 
             // Check if localStorage is available.
             if (!context.localStorage) {
-                throw 'localStorage not available';
+                throw new Error("localStorage not available");
             }
 
             // Add custom prefix to Channel Name.
-            const _channelId = _prefix + channelName
-            const isFirstChannel = (_channels === null);
+            const _channelId = _prefix + channelName;
+            const isFirstChannel = _channels === null;
 
             this.channelId = _channelId;
 
@@ -144,14 +183,50 @@
             // Adds the current Broadcast Channel.
             _channels[_channelId].push(this);
 
-            // Creates a sufficiently random name for the current instance of BC.
-            this.name = _channelId + '::::' + getRandomString() + getTimestamp();
+            // Creates a sufficiently random instance identifier for the current instance of BC.
+            this._instanceId =
+                _channelId + "::::" + getRandomString() + getTimestamp();
 
             // If it is the first instance of Channel created, also creates the storage listener.
             if (isFirstChannel) {
-                // addEventListener.
-                context.addEventListener('storage', _onmsg.bind(this), false);
+                _storageListener = _onmsg;
+                context.addEventListener("storage", _storageListener, false);
             }
+        }
+
+        /**
+         * Gets the name of the broadcast channel
+         */
+        get name() {
+            return this.channelName;
+        }
+
+        /**
+         * Gets the onmessage event handler
+         */
+        get onmessage() {
+            return this._onmessage;
+        }
+
+        /**
+         * Sets the onmessage event handler
+         */
+        set onmessage(handler) {
+            this._onmessage = handler;
+        }
+
+        /**
+         * Gets the onmessageerror event handler
+         */
+        get onmessageerror() {
+            return this._onmessageerror;
+        }
+
+        /**
+         * Sets the onmessageerror event handler
+         */
+        set onmessageerror(handler) {
+            this._onmessageerror = handler;
         }
 
         /**
@@ -162,7 +237,7 @@
             if (!_channels) return;
 
             if (this.closed) {
-                throw 'This BroadcastChannel is closed.';
+                throw new Error("This BroadcastChannel is closed.");
             }
 
             // Build the event-like response.
@@ -170,54 +245,83 @@
 
             // SAME-TAB communication.
             const subscribers = _channels[this.channelId] || [];
-            subscribers.forEach(sub => {
+            subscribers.forEach((sub) => {
                 // We don't send the message to ourselves.
-                if (sub.closed || sub.name === this.name) return;
-                const event = new CustomEvent('message', msgObj);
+                if (sub.closed || sub._instanceId === this._instanceId) return;
+                const event = new CustomEvent("message", msgObj);
                 sub.dispatchEvent(event);
+                // Also call onmessage if set
+                if (typeof sub.onmessage === "function") {
+                    sub.onmessage(event);
+                }
             });
 
             // CROSS-TAB communication.
             // Adds some properties to communicate among the tabs.
             const editedObj = {
                 channelId: this.channelId,
-                bcId: this.name,
+                bcId: this._instanceId,
                 tabId: _tabId,
-                message: msgObj
+                message: msgObj,
             };
 
             try {
                 const editedJSON = JSON.stringify(editedObj);
-                const lsKey = `${_prefix}message_${getRandomString()}_${this.channelId}`;
+                const lsKey = `${_prefix}message_${getRandomString()}_${
+                    this.channelId
+                }`;
                 // Set localStorage item (and, after that, removes it).
                 context.localStorage.setItem(lsKey, editedJSON);
-                setTimeout(() => context.localStorage.removeItem(lsKey), 1000);
+                setTimeout(() => {
+                    try {
+                        context.localStorage.removeItem(lsKey);
+                    } catch (e) {
+                        // Ignore cleanup errors
+                    }
+                }, 1000);
             } catch (ex) {
-                throw 'Message conversion has resulted in an error.';
+                // Handle localStorage quota exceeded or other storage errors
+                const errorEvent = new CustomEvent("messageerror", {
+                    detail: {
+                        data: data,
+                        origin: context.location.origin,
+                        error: ex,
+                    },
+                });
+                this.dispatchEvent(errorEvent);
+                if (typeof this.onmessageerror === "function") {
+                    this.onmessageerror(errorEvent);
+                }
             }
-        };
+        }
 
         /**
          * Closes a Broadcast channel.
          */
         close() {
+            if (this.closed) return; // Already closed
+
             this.closed = true;
             const subscribers = _channels[this.channelId];
-            const index = subscribers.indexOf(this);
-            if (index > -1) {
-                subscribers.splice(index, 1);
+
+            if (subscribers) {
+                const index = subscribers.indexOf(this);
+                if (index > -1) {
+                    subscribers.splice(index, 1);
+                }
+                // If we have no channels, remove the listener.
+                if (!subscribers.length) {
+                    delete _channels[this.channelId];
+                }
             }
-            // If we have no channels, remove the listener.
-            if (!subscribers.length) {
-                delete _channels[this.channelId];
+
+            if (isEmpty(_channels) && _storageListener) {
+                context.removeEventListener("storage", _storageListener);
+                _storageListener = null;
             }
-            if (isEmpty(_channels)) {
-                context.removeEventListener('storage', _onmsg.bind(this));
-            }
-        };
+        }
     }
 
     // Sets BroadcastChannel, if not available.
     context.BroadcastChannel = context.BroadcastChannel || _BroadcastChannel;
-
 })(window.top);

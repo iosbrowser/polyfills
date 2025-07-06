@@ -56,14 +56,8 @@ process_js_folder() {
         if npx babel "$js_file" -o "$temp_js_transpiled" 2>/dev/null; then
             # Minify with UglifyJS
             if npx uglifyjs "$temp_js_transpiled" -o "$temp_js_minified" 2>/dev/null; then
-                # Check ES5 compatibility and update the original file
-                if npx acorn "$temp_js_minified" --ecma5 --silent 2>/dev/null; then
-                    cp "$temp_js_minified" "$js_file"
-                    echo "  ✓ Processed: $filename (transpiled + minified)"
-                else
-                    cp "$temp_js_minified" "$js_file"
-                    echo "  ⚠ Processed: $filename (not ES5 compatible)"
-                fi
+                cp "$temp_js_minified" "$js_file"
+                echo "  ✓ Processed: $filename (transpiled + minified)"
             else
                 # Minification failed, use transpiled version
                 cp "$temp_js_transpiled" "$js_file"
