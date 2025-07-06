@@ -5,7 +5,7 @@
  Please refer to the official MDN documentation of the Broadcast Channel API.
  @see <a href="https://developer.mozilla.org/en-US/docs/Web/API/Broadcast_Channel_API">Broadcast Channel API on MDN</a>
  @author Alessandro Piana
- @version 0.0.6
+ @version 0.0.6-fixed
  */
 
 /*
@@ -89,20 +89,29 @@
         if (key.indexOf(`${_prefix}message_`) > -1 && !isRemoved) {
             try {
                 obj = JSON.parse(newValue);
+                // Validate parsed object structure
+                if (
+                    !obj ||
+                    typeof obj !== "object" ||
+                    !obj.channelId ||
+                    !obj.message
+                ) {
+                    return;
+                }
             } catch (ex) {
                 // Handle JSON parsing errors by dispatching messageerror events
                 if (_channels) {
                     Object.values(_channels).forEach((subscribers) => {
                         subscribers.forEach((sub) => {
                             if (!sub.closed) {
-                                const errorEvent = new CustomEvent(
+                                const errorEvent = new MessageEvent(
                                     "messageerror",
                                     {
-                                        detail: {
-                                            data: newValue,
-                                            origin: context.location.origin,
-                                            error: ex,
-                                        },
+                                        data: null,
+                                        origin: context.location.origin,
+                                        lastEventId: "",
+                                        source: null,
+                                        ports: [],
                                     }
                                 );
                                 sub.dispatchEvent(errorEvent);
@@ -128,7 +137,15 @@
                 const subscribers = _channels[obj.channelId];
                 subscribers.forEach((sub) => {
                     if (!sub.closed) {
-                        const event = new CustomEvent("message", obj.message);
+                        // Create proper MessageEvent with data property
+                        const event = new MessageEvent("message", {
+                            data: obj.message.data,
+                            origin:
+                                obj.message.origin || context.location.origin,
+                            lastEventId: obj.message.lastEventId || "",
+                            source: null,
+                            ports: [],
+                        });
                         sub.dispatchEvent(event);
                         // Also call onmessage if set
                         if (typeof sub.onmessage === "function") {
@@ -231,13 +248,16 @@
 
         /**
          * Sends the message to different channels.
-         * @param {Object} data - the data to be sent ( actually, it can be any JS type ).
+         * @param {*} data - the data to be sent ( actually, it can be any JS type ).
          */
         postMessage(data) {
             if (!_channels) return;
 
             if (this.closed) {
-                throw new Error("This BroadcastChannel is closed.");
+                throw new DOMException(
+                    "This BroadcastChannel is closed.",
+                    "InvalidStateError"
+                );
             }
 
             // Build the event-like response.
@@ -248,7 +268,14 @@
             subscribers.forEach((sub) => {
                 // We don't send the message to ourselves.
                 if (sub.closed || sub._instanceId === this._instanceId) return;
-                const event = new CustomEvent("message", msgObj);
+                // Create proper MessageEvent with data property
+                const event = new MessageEvent("message", {
+                    data: msgObj.data,
+                    origin: msgObj.origin || context.location.origin,
+                    lastEventId: msgObj.lastEventId || "",
+                    source: null,
+                    ports: [],
+                });
                 sub.dispatchEvent(event);
                 // Also call onmessage if set
                 if (typeof sub.onmessage === "function") {
@@ -272,21 +299,22 @@
                 }`;
                 // Set localStorage item (and, after that, removes it).
                 context.localStorage.setItem(lsKey, editedJSON);
+                // Use shorter timeout to reduce race conditions
                 setTimeout(() => {
                     try {
                         context.localStorage.removeItem(lsKey);
                     } catch (e) {
                         // Ignore cleanup errors
                     }
-                }, 1000);
+                }, 100);
             } catch (ex) {
                 // Handle localStorage quota exceeded or other storage errors
-                const errorEvent = new CustomEvent("messageerror", {
-                    detail: {
-                        data: data,
-                        origin: context.location.origin,
-                        error: ex,
-                    },
+                const errorEvent = new MessageEvent("messageerror", {
+                    data: null,
+                    origin: context.location.origin,
+                    lastEventId: "",
+                    source: null,
+                    ports: [],
                 });
                 this.dispatchEvent(errorEvent);
                 if (typeof this.onmessageerror === "function") {
