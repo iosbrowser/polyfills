@@ -1,0 +1,1 @@
+"use strict";if(typeof crypto!=="undefined"&&!crypto.subtle&&crypto.webkitSubtle){crypto.subtle=crypto.webkitSubtle}
