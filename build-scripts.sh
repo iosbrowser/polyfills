@@ -8,6 +8,7 @@ set -e
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 SOURCE_SCRIPTS="$SCRIPT_DIR/scripts"
+SOURCE_SCRIPTS_PRIORITY="$SCRIPT_DIR/scripts-priority"
 SOURCE_SCRIPTS_POST="$SCRIPT_DIR/scripts-post"
 TARGET_BASE="$SCRIPT_DIR/layout/Library/Application Support/Polyfills"
 
@@ -78,6 +79,7 @@ process_js_folder() {
 # Create target directories
 mkdir -p "$TARGET_BASE/scripts"
 mkdir -p "$TARGET_BASE/scripts-post"
+mkdir -p "$TARGET_BASE/scripts-priority"
 
 # Copy scripts directory structure first
 if [ -d "$SOURCE_SCRIPTS" ]; then
@@ -95,6 +97,24 @@ if [ -d "$SOURCE_SCRIPTS" ]; then
 
     # Remove disabled files
     find "$TARGET_BASE/scripts" -name "*.disabled" -delete 2>/dev/null || true
+fi
+
+# Copy scripts-priority directory structure
+if [ -d "$SOURCE_SCRIPTS_PRIORITY" ]; then
+    echo "Copying scripts-priority structure..."
+    cp -r "$SOURCE_SCRIPTS_PRIORITY"/* "$TARGET_BASE/scripts-priority/" 2>/dev/null || true
+
+    # Create base directory and move all JS files from root level there
+    mkdir -p "$TARGET_BASE/scripts-priority/base"
+    find "$TARGET_BASE/scripts-priority" -maxdepth 1 -name "*.js" -type f | while IFS= read -r js_file; do
+        if [ -f "$js_file" ]; then
+            mv "$js_file" "$TARGET_BASE/scripts-priority/base/"
+            echo "  Moved $(basename "$js_file") to base folder"
+        fi
+    done
+
+    # Remove disabled files
+    find "$TARGET_BASE/scripts-priority" -name "*.disabled" -delete 2>/dev/null || true
 fi
 
 # Copy scripts-post directory structure first
@@ -125,6 +145,13 @@ if [ -d "$TARGET_BASE/scripts" ]; then
     done
 fi
 
+# Process all folders in scripts-priority directory (excluding root level)
+if [ -d "$TARGET_BASE/scripts-priority" ]; then
+    find "$TARGET_BASE/scripts-priority" -mindepth 1 -type d | while IFS= read -r folder; do
+        process_js_folder "$folder"
+    done
+fi
+
 # Process all folders in scripts-post directory (excluding root level)
 if [ -d "$TARGET_BASE/scripts-post" ]; then
     find "$TARGET_BASE/scripts-post" -mindepth 1 -type d | while IFS= read -r folder; do
@@ -135,8 +162,3 @@ fi
 echo ""
 echo "All JavaScript files have been transpiled and minified for optimal performance."
 echo "Optimized structure created at: $TARGET_BASE"
-echo ""
-echo "The tweak will load JavaScript files dynamically from:"
-echo "/Library/Application Support/Polyfills/"
-echo ""
-echo "Note: If npx/Node.js is not available, files were copied without optimization."

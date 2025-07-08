@@ -83,6 +83,14 @@ static NSString *loadJSFromDirectory(NSString *directoryPath) {
         NSString *filePath = [directoryPath stringByAppendingPathComponent:fileName];
         NSString *content = loadJSFromFile(filePath);
         if (content) {
+            if ([fileName isEqualToString:@"Navigator.hardwareConcurrency.js"]) {
+                NSInteger coreCount = [[NSProcessInfo processInfo] processorCount];
+                NSInteger clamped = (coreCount <= 2) ? 2 :
+                                    (coreCount <= 4) ? 4 :
+                                    (coreCount <= 6) ? 6 : 8;
+                NSString *js = [NSString stringWithFormat:@"window.__injectedHardwareConcurrency__ = %ld;", (long)clamped];
+                content = [js stringByAppendingString:content];
+            }
             [combinedScript appendString:content];
             [combinedScript appendString:@"\n"];
         }
@@ -101,9 +109,9 @@ static dispatch_queue_t scriptLoadingQueue;
 
 // Helper function to load scripts for a specific iOS version or older
 // If injectionCallback is provided, scripts are injected immediately as they're loaded
-static NSString *loadScriptsForIOSVersion(NSString *basePath, BOOL isPost, void (^injectionCallback)(NSString *script, BOOL isPost)) {
-    NSString *scriptsDir = isPost ? @"scripts-post" : @"scripts";
+static NSString *loadScriptsForIOSVersion(NSString *basePath, NSString *scriptsDir, void (^injectionCallback)(NSString *script, BOOL isPost)) {
     NSString *fullBasePath = [basePath stringByAppendingPathComponent:scriptsDir];
+    BOOL isPost = [scriptsDir hasSuffix:@"-post"];
 
     NSMutableString *combinedScripts = [NSMutableString string];
 
@@ -170,16 +178,15 @@ static NSString *loadScriptsForIOSVersion(NSString *basePath, BOOL isPost, void 
         NSInteger vMinor = components.count > 1 ? [components[1] integerValue] : 0;
 
         // If current iOS version is less than this polyfill version, include it
-        if (!isIOSVersionOrNewer(vMajor, vMinor)) {
-            NSString *versionPath = [fullBasePath stringByAppendingPathComponent:versionStr];
-            NSString *versionScripts = loadJSFromDirectory(versionPath);
-            if (versionScripts.length > 0) {
-                if (injectionCallback) {
-                    injectionCallback(versionScripts, isPost);
-                }
-                [combinedScripts appendString:versionScripts];
-                [combinedScripts appendString:@"\n"];
+        if (isIOSVersionOrNewer(vMajor, vMinor)) continue;
+        NSString *versionPath = [fullBasePath stringByAppendingPathComponent:versionStr];
+        NSString *versionScripts = loadJSFromDirectory(versionPath);
+        if (versionScripts.length > 0) {
+            if (injectionCallback) {
+                injectionCallback(versionScripts, isPost);
             }
+            [combinedScripts appendString:versionScripts];
+            [combinedScripts appendString:@"\n"];
         }
     }
 
@@ -252,11 +259,14 @@ static void loadAndInjectScriptsImmediately(WKUserContentController *controller)
     // Load and inject scripts immediately as they're loaded
     dispatch_async(scriptLoadingQueue, ^{
         @autoreleasepool {
+            // Load priority scripts with immediate injection
+            loadScriptsForIOSVersion(polyfillsBasePath, @"scripts-priority", injectionCallback);
+
             // Load main scripts with immediate injection
-            loadScriptsForIOSVersion(polyfillsBasePath, NO, injectionCallback);
+            loadScriptsForIOSVersion(polyfillsBasePath, @"scripts", injectionCallback);
 
             // Load post scripts with immediate injection
-            loadScriptsForIOSVersion(polyfillsBasePath, YES, injectionCallback);
+            loadScriptsForIOSVersion(polyfillsBasePath, @"scripts-post", injectionCallback);
         }
     });
 }
