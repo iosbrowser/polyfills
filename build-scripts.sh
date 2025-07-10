@@ -87,6 +87,49 @@ update_cache() {
     echo "$source_file:$checksum" >>"$CACHE_FILE"
 }
 
+# Function to clean up orphaned files (files that exist in target but not in source)
+cleanup_orphaned_files() {
+    local source_dir="$1"
+    local target_dir="$2"
+    local dir_name="$3"
+
+    if [ ! -d "$source_dir" ] || [ ! -d "$target_dir" ]; then
+        return 0
+    fi
+
+    echo "Cleaning up orphaned files in $dir_name..."
+
+    # Find all JS files in target directory
+    find "$target_dir" -name "*.js" -type f | while IFS= read -r target_file; do
+        local relative_path="${target_file#$target_dir/}"
+        local source_file=""
+
+        # Map target file back to source file location
+        if [[ "$relative_path" == base/* ]]; then
+            # Files in base folder come from root level of source
+            source_file="$source_dir/${relative_path#base/}"
+        else
+            # Files in subdirectories
+            source_file="$source_dir/$relative_path"
+        fi
+
+        # If corresponding source file doesn't exist, remove the target file
+        if [ ! -f "$source_file" ]; then
+            echo "  🗑 Removing orphaned file: $relative_path"
+            rm -f "$target_file"
+
+            # Also remove from cache if present
+            if [ -f "$CACHE_FILE" ]; then
+                grep -v "^$source_file:" "$CACHE_FILE" >"$CACHE_FILE.tmp" 2>/dev/null || true
+                mv "$CACHE_FILE.tmp" "$CACHE_FILE"
+            fi
+        fi
+    done
+
+    # Remove empty directories
+    find "$target_dir" -type d -empty -delete 2>/dev/null || true
+}
+
 # Function to copy file only if it doesn't exist in target or has changed
 copy_if_needed() {
     local source_file="$1"
@@ -290,6 +333,11 @@ mkdir -p "$TARGET_BASE/scripts-priority"
 copy_directory_structure "$SOURCE_SCRIPTS" "$TARGET_BASE/scripts" "scripts"
 copy_directory_structure "$SOURCE_SCRIPTS_PRIORITY" "$TARGET_BASE/scripts-priority" "scripts-priority"
 copy_directory_structure "$SOURCE_SCRIPTS_POST" "$TARGET_BASE/scripts-post" "scripts-post"
+
+# Clean up orphaned files (files that were moved or deleted from source)
+cleanup_orphaned_files "$SOURCE_SCRIPTS" "$TARGET_BASE/scripts" "scripts"
+cleanup_orphaned_files "$SOURCE_SCRIPTS_PRIORITY" "$TARGET_BASE/scripts-priority" "scripts-priority"
+cleanup_orphaned_files "$SOURCE_SCRIPTS_POST" "$TARGET_BASE/scripts-post" "scripts-post"
 
 echo ""
 echo "Building and optimizing JavaScript files with Babel and UglifyJS..."
