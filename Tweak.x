@@ -32,6 +32,8 @@
 #import <version.h>
 #import "Header.h"
 
+BOOL userAgentEnabled = NO;
+
 @interface _SFReloadOptionsController : NSObject
 @end
 
@@ -224,7 +226,7 @@ static void setUserAgent(WKWebView *webView, NSString *userAgent) {
 }
 
 static void overrideUserAgent(WKWebView *webView) {
-    if (isIOSVersionOrNewer(16, 3)) return;
+    if (isIOSVersionOrNewer(16, 3) || !userAgentEnabled) return;
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wunguarded-availability-new"
     WKContentMode contentMode = WKContentModeRecommended;
@@ -235,38 +237,52 @@ static void overrideUserAgent(WKWebView *webView) {
     setUserAgent(webView, ua);
 }
 
-// Function to load and inject scripts immediately as they're loaded
+// Function to load and inject scripts with optimized batching
 static void loadAndInjectScriptsImmediately(WKUserContentController *controller) {
     NSString *polyfillsBasePath = getPolyfillsBasePath();
 
-    void (^injectionCallback)(NSString *, BOOL) = ^(NSString *script, BOOL isPost) {
-        dispatch_async(dispatch_get_main_queue(), ^{
-            if (script.length > 0 && controller) {
-                WKUserScriptInjectionTime injectionTime = isPost ?
-                    WKUserScriptInjectionTimeAtDocumentEnd :
-                    WKUserScriptInjectionTimeAtDocumentStart;
-
-                [controller addUserScript:[[WKUserScript alloc] initWithSource:script
-                                                                  injectionTime:injectionTime
-                                                               forMainFrameOnly:NO]];
-
-                HBLogDebug(@"Polyfills: Injected %@ script (%lu chars)",
-                          isPost ? @"post" : @"main", (unsigned long)script.length);
-            }
-        });
-    };
-
-    // Load and inject scripts immediately as they're loaded
+    // Load and inject scripts in batches to minimize WKUserScript overhead
     dispatch_async(scriptLoadingQueue, ^{
         @autoreleasepool {
-            // Load priority scripts with immediate injection
-            loadScriptsForIOSVersion(polyfillsBasePath, @"scripts-priority", injectionCallback);
+            NSMutableString *combinedStartScripts = [NSMutableString string];
+            NSMutableString *combinedEndScripts = [NSMutableString string];
 
-            // Load main scripts with immediate injection
-            loadScriptsForIOSVersion(polyfillsBasePath, @"scripts", injectionCallback);
+            // Load priority scripts (document start)
+            NSString *priorityScripts = loadScriptsForIOSVersion(polyfillsBasePath, @"scripts-priority", nil);
+            if (priorityScripts.length > 0) {
+                [combinedStartScripts appendString:priorityScripts];
+                [combinedStartScripts appendString:@"\n"];
+            }
 
-            // Load post scripts with immediate injection
-            loadScriptsForIOSVersion(polyfillsBasePath, @"scripts-post", injectionCallback);
+            // Load main scripts (document start)
+            NSString *mainScripts = loadScriptsForIOSVersion(polyfillsBasePath, @"scripts", nil);
+            if (mainScripts.length > 0) {
+                [combinedStartScripts appendString:mainScripts];
+                [combinedStartScripts appendString:@"\n"];
+            }
+
+            // Load post scripts (document end)
+            NSString *postScripts = loadScriptsForIOSVersion(polyfillsBasePath, @"scripts-post", nil);
+            if (postScripts.length > 0) {
+                [combinedEndScripts appendString:postScripts];
+            }
+
+            // Inject combined scripts as single WKUserScript objects
+            dispatch_async(dispatch_get_main_queue(), ^{
+                if (combinedStartScripts.length > 0 && controller) {
+                    [controller addUserScript:[[WKUserScript alloc] initWithSource:[combinedStartScripts copy]
+                                                                      injectionTime:WKUserScriptInjectionTimeAtDocumentStart
+                                                                   forMainFrameOnly:NO]];
+                    HBLogDebug(@"Polyfills: Injected combined start scripts (%lu chars)", (unsigned long)combinedStartScripts.length);
+                }
+
+                if (combinedEndScripts.length > 0 && controller) {
+                    [controller addUserScript:[[WKUserScript alloc] initWithSource:[combinedEndScripts copy]
+                                                                      injectionTime:WKUserScriptInjectionTimeAtDocumentEnd
+                                                                   forMainFrameOnly:NO]];
+                    HBLogDebug(@"Polyfills: Injected combined end scripts (%lu chars)", (unsigned long)combinedEndScripts.length);
+                }
+            });
         }
     });
 }
@@ -294,12 +310,24 @@ static const void *InjectedKey = &InjectedKey;
 
 - (void)setCustomUserAgent:(NSString *)customUserAgent {
     HBLogDebug(@"Polyfills Setting custom user agent: %@", customUserAgent);
-    %orig(getFinalUA(customUserAgent));
+    %orig(userAgentEnabled ? getFinalUA(customUserAgent) : customUserAgent);
 }
 
 - (void)setApplicationNameForUserAgent:(NSString *)applicationNameForUserAgent {
     HBLogDebug(@"Polyfills Setting application name for user agent: %@", applicationNameForUserAgent);
-    %orig(getFinalUA(applicationNameForUserAgent));
+    %orig(userAgentEnabled ? getFinalUA(applicationNameForUserAgent) : applicationNameForUserAgent);
+}
+
+%end
+
+%group UserAgent
+
+%hook NSMutableURLRequest
+
+- (void)setValue:(NSString *)value forHTTPHeaderField:(NSString *)field {
+    if ([field caseInsensitiveCompare:@"User-Agent"] == NSOrderedSame)
+        value = IS_IPAD ? desktopUserAgent : mobileUserAgent;
+    %orig(value, field);
 }
 
 %end
@@ -307,22 +335,20 @@ static const void *InjectedKey = &InjectedKey;
 %hook _SFReloadOptionsController
 
 - (void)didMarkURLAsNeedingDesktopUserAgent:(id)arg1 {
-    if (!isIOSVersionOrNewer(16, 3)) {
-        HBLogDebug(@"Polyfills didMarkURLAsNeedingDesktopUserAgent called");
-        WKWebView *webView = [self valueForKey:@"_webView"];
-        if (webView) setUserAgent(webView, desktopUserAgent);
-    }
+    HBLogDebug(@"Polyfills didMarkURLAsNeedingDesktopUserAgent called");
+    WKWebView *webView = [self valueForKey:@"_webView"];
+    if (webView) setUserAgent(webView, desktopUserAgent);
     %orig;
 }
 
 - (void)didMarkURLAsNeedingStandardUserAgent:(id)arg1 {
-    if (!isIOSVersionOrNewer(16, 3)) {
-        HBLogDebug(@"Polyfills didMarkURLAsNeedingStandardUserAgent called");
-        WKWebView *webView = [self valueForKey:@"_webView"];
-        if (webView) setUserAgent(webView, mobileUserAgent);
-    }
+    HBLogDebug(@"Polyfills didMarkURLAsNeedingStandardUserAgent called");
+    WKWebView *webView = [self valueForKey:@"_webView"];
+    if (webView) setUserAgent(webView, mobileUserAgent);
     %orig;
 }
+
+%end
 
 %end
 
@@ -348,4 +374,9 @@ static const void *InjectedKey = &InjectedKey;
     scriptLoadingQueue = dispatch_queue_create("com.polyfills.scriptloading", DISPATCH_QUEUE_SERIAL);
 
     %init;
+
+    if (!isIOSVersionOrNewer(16, 3) && CFPreferencesGetAppBooleanValue(userAgentKey, domain, NULL)) {
+        userAgentEnabled = YES;
+        %init(UserAgent);
+    }
 }

@@ -6,7 +6,7 @@ Provides JavaScript polyfills (and fixes) for Mobile Safari and WebKit-based vie
 
 This tweak injects JavaScript polyfills to enhance web compatibility for older iOS versions. It targets Mobile Safari, Safari View Services, and general WebKit views.
 
-The JavaScript polyfills can be found in `/scripts` and `/scripts-post` folders.
+The JavaScript polyfills can be found in `/scripts`, `/scripts-priority` and `/scripts-post` folders.
 
 The scripts under `/scripts` are injected at [the document start](https://developer.apple.com/documentation/webkit/wkuserscriptinjectiontime/atdocumentstart?language=objc), while those in `/scripts-post` are injected after [the document has loaded](https://developer.apple.com/documentation/webkit/wkuserscriptinjectiontime/atdocumentend?language=objc).
 

@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # Script to build and optimize polyfill scripts for packaging
-# This processes all scripts from ./scripts and ./scripts-post, transpiles and minifies them
+# This processes all scripts from ./scripts, ./scripts-priority and ./scripts-post, transpiles and minifies them
 # for optimal package size and runtime performance
 #
 # Usage: ./build-scripts.sh [--force]

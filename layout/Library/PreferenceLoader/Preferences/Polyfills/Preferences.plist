@@ -17,6 +17,14 @@
     <array>
         <dict>
             <key>cell</key>
+            <string>PSGroupCell</string>
+            <key>footerAlignment</key>
+            <integer>0</integer>
+            <key>footerText</key>
+            <string>Spoof User Agent to iOS 16.3. May improve compatibility on some websites. May also break some other websites.</string>
+        </dict>
+        <dict>
+            <key>cell</key>
             <string>PSSwitchCell</string>
             <key>defaults</key>
             <string>com.apple.UIKit</string>
@@ -26,6 +34,18 @@
             <string>PolyfillsEnabled</string>
             <key>default</key>
             <true/>
+        </dict>
+        <dict>
+            <key>cell</key>
+            <string>PSSwitchCell</string>
+            <key>defaults</key>
+            <string>com.apple.UIKit</string>
+            <key>label</key>
+            <string>Spoof User Agent</string>
+            <key>key</key>
+            <string>PolyfillsUserAgentEnabled</string>
+            <key>default</key>
+            <false/>
         </dict>
         <dict>
             <key>cell</key>
