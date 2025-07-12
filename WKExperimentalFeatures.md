@@ -12,4 +12,3 @@
 - `TransformStream API` (Web Streams API `TransformStream`)
 - `Web Animations composite operations` (Web Animations API `composite` property)
 - `inert attribute` (HTML `inert` attribute)
-- `requestIdleCallback` (`window.requestIdleCallback()`)
