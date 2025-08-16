@@ -93,8 +93,9 @@ static NSString *loadJSFromDirectory(NSString *directoryPath) {
                 NSString *js = [NSString stringWithFormat:@"window.__injectedHardwareConcurrency__ = %ld;", (long)clamped];
                 content = [js stringByAppendingString:content];
             }
-            [combinedScript appendString:content];
-            [combinedScript appendString:@"\n"];
+            // Wrap each file in an IIFE to avoid leaking variables/functions across files
+            NSString *wrapped = [NSString stringWithFormat:@"(function(){\n%@\n})();\n", content];
+            [combinedScript appendString:wrapped];
         }
     }
 
@@ -203,14 +204,33 @@ static NSString *getFinalUA(NSString *defaultUA) {
     NSString *spoofedVersion = @"16_3";
     NSString *spoofedSafariVersion = @"Version/16.3";
     NSError *regexError = nil;
-    NSRegularExpression *regex = [NSRegularExpression regularExpressionWithPattern:@"OS \\d+_\\d+(?:_\\d+)?" options:0 error:&regexError];
+    // Capture major & minor (ignore patch) from "OS major_minor(_patch)" pattern
+    NSRegularExpression *osCaptureRegex = [NSRegularExpression regularExpressionWithPattern:@"OS (\\d+?)_(\\d+)(?:_\\d+)?" options:0 error:&regexError];
     if (regexError) {
         HBLogDebug(@"Polyfills Regex error: %@", regexError.localizedDescription);
         return finalUA;
     }
-    finalUA = [regex stringByReplacingMatchesInString:finalUA options:0 range:NSMakeRange(0, finalUA.length) withTemplate:[NSString stringWithFormat:@"OS %@", spoofedVersion]];
-    NSRegularExpression *versionRegex = [NSRegularExpression regularExpressionWithPattern:@"Version/\\d+(\\.\\d+)*" options:0 error:nil];
-    finalUA = [versionRegex stringByReplacingMatchesInString:finalUA options:0 range:NSMakeRange(0, finalUA.length) withTemplate:spoofedSafariVersion];
+
+    NSTextCheckingResult *match = [osCaptureRegex firstMatchInString:finalUA options:0 range:NSMakeRange(0, finalUA.length)];
+    BOOL shouldSpoof = NO;
+    if (match.numberOfRanges >= 3) {
+        NSString *majorStr = [finalUA substringWithRange:[match rangeAtIndex:1]];
+        NSString *minorStr = [finalUA substringWithRange:[match rangeAtIndex:2]];
+        NSInteger major = majorStr.integerValue;
+        NSInteger minor = minorStr.integerValue;
+        if (major < 16 || (major == 16 && minor < 3)) {
+            shouldSpoof = YES;
+        }
+    }
+
+    if (shouldSpoof) {
+        // Replace the OS version fragment
+        NSRegularExpression *osReplaceRegex = [NSRegularExpression regularExpressionWithPattern:@"OS \\d+_\\d+(?:_\\d+)?" options:0 error:nil];
+        finalUA = [osReplaceRegex stringByReplacingMatchesInString:finalUA options:0 range:NSMakeRange(0, finalUA.length) withTemplate:[NSString stringWithFormat:@"OS %@", spoofedVersion]];
+        // Keep Safari version spoof tied to OS spoof to avoid inconsistencies
+        NSRegularExpression *versionRegex = [NSRegularExpression regularExpressionWithPattern:@"Version/\\d+(\\.\\d+)*" options:0 error:nil];
+        finalUA = [versionRegex stringByReplacingMatchesInString:finalUA options:0 range:NSMakeRange(0, finalUA.length) withTemplate:spoofedSafariVersion];
+    }
     finalUA = [finalUA stringByReplacingOccurrencesOfString:@"iPod touch" withString:@"iPhone"];
     return finalUA;
 }
