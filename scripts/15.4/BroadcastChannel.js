@@ -352,4 +352,4 @@
 
     // Sets BroadcastChannel, if not available.
     context.BroadcastChannel = context.BroadcastChannel || _BroadcastChannel;
-})(window.top);
+})(self);

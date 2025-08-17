@@ -1,4 +1,4 @@
-// https://github.com/nguyenj/fullscreen-polyfill
+// https://github.com/nguyenj/fullscreen-polyfill + GPT-5
 (function () {
     "use strict";
 
@@ -23,26 +23,24 @@
     ];
 
     // Get the vendor fullscreen prefixed api
+    // Be defensive: in disallowed iframes (Permissions Policy), even reading
+    // certain fullscreen properties can throw. Avoid direct reads during detection.
     const fsVendorKeywords = (function getFullscreenApi() {
-        const fullscreenEnabled = [spec[1], webkit[1]].find(
-            (prefix) => prefix && document[prefix]
-        );
-        return (
-            [spec, webkit].find((vendor) => {
-                return vendor.find((prefix) => prefix === fullscreenEnabled);
-            }) || []
-        );
+        try {
+            const fullscreenEnabledKey = [spec[1], webkit[1]].find(
+                (prefix) => prefix && prefix in document
+            );
+            return (
+                [spec, webkit].find((vendor) => vendor[1] === fullscreenEnabledKey) || []
+            );
+        } catch (e) {
+            // If detection triggers due to restrictive Permissions Policy, disable polyfill.
+            return [];
+        }
     })();
 
-    function handleEvent(eventType, event) {
+    function handleEvent(eventType) {
         try {
-            document[spec[0]] =
-                document[fsVendorKeywords[0]] ||
-                !!document[fsVendorKeywords[2]] ||
-                false;
-            document[spec[1]] = document[fsVendorKeywords[1]] || false;
-            document[spec[2]] = document[fsVendorKeywords[2]] || null;
-
             document.dispatchEvent(new Event(eventType));
         } catch (e) {
             console.warn("Fullscreen event handling failed:", e);
@@ -56,20 +54,59 @@
         }
 
         try {
-            // fullscreen
-            // Defaults to false for cases like MS where they do not have this
-            // attribute. Another way to check whether fullscreen is active is to look
-            // at the fullscreenElement attribute.
-            document[spec[0]] =
-                document[fsVendorKeywords[0]] ||
-                !!document[fsVendorKeywords[2]] ||
-                false;
+            // Define lazy getters to avoid triggering policy checks during setup
+            if (!(spec[0] in document)) {
+                Object.defineProperty(document, spec[0], {
+                    configurable: true,
+                    enumerable: true,
+                    get() {
+                        try {
+                            return (
+                                (fsVendorKeywords[0] &&
+                                    document[fsVendorKeywords[0]]) ||
+                                (fsVendorKeywords[2] &&
+                                    !!document[fsVendorKeywords[2]]) ||
+                                false
+                            );
+                        } catch (_) {
+                            return false;
+                        }
+                    },
+                });
+            }
 
-            // fullscreenEnabled
-            document[spec[1]] = document[fsVendorKeywords[1]] || false;
+            if (!(spec[1] in document)) {
+                Object.defineProperty(document, spec[1], {
+                    configurable: true,
+                    enumerable: true,
+                    get() {
+                        try {
+                            return !!(
+                                fsVendorKeywords[1] &&
+                                document[fsVendorKeywords[1]]
+                            );
+                        } catch (_) {
+                            return false;
+                        }
+                    },
+                });
+            }
 
-            // fullscreenElement
-            document[spec[2]] = document[fsVendorKeywords[2]] || null;
+            if (!(spec[2] in document)) {
+                Object.defineProperty(document, spec[2], {
+                    configurable: true,
+                    enumerable: true,
+                    get() {
+                        try {
+                            return fsVendorKeywords[2]
+                                ? document[fsVendorKeywords[2]] || null
+                                : null;
+                        } catch (_) {
+                            return null;
+                        }
+                    },
+                });
+            }
 
             // onfullscreenchange
             if (fsVendorKeywords[3]) {
@@ -89,19 +126,71 @@
                 );
             }
 
-            // exitFullscreen
-            if (typeof document[fsVendorKeywords[5]] === "function") {
+            // exitFullscreen (normalize to Promise) - define without probing vendor at setup time
+            if (!(spec[5] in document)) {
                 document[spec[5]] = function () {
-                    return document[fsVendorKeywords[5]]();
+                    try {
+                        const fn =
+                            fsVendorKeywords[5] &&
+                            document[fsVendorKeywords[5]];
+                        if (typeof fn === "function") {
+                            const ret = fn.call(document);
+                            return ret && typeof ret.then === "function"
+                                ? ret
+                                : Promise.resolve();
+                        }
+                        return Promise.reject(
+                            new DOMException(
+                                "Fullscreen API not available",
+                                "NotSupportedError"
+                            )
+                        );
+                    } catch (e) {
+                        const err =
+                            e instanceof DOMException
+                                ? e
+                                : new DOMException(
+                                      e && e.message
+                                          ? e.message
+                                          : "Failed to exit fullscreen",
+                                      "NotAllowedError"
+                                  );
+                        return Promise.reject(err);
+                    }
                 };
             }
 
-            // requestFullscreen
-            if (Element.prototype && fsVendorKeywords[6]) {
+            // requestFullscreen (normalize to Promise)
+            if (Element.prototype && fsVendorKeywords[6] && !(spec[6] in Element.prototype)) {
                 Element.prototype[spec[6]] = function () {
                     if (typeof this[fsVendorKeywords[6]] === "function") {
-                        return this[fsVendorKeywords[6]].apply(this, arguments);
+                        try {
+                            const ret = this[fsVendorKeywords[6]].apply(
+                                this,
+                                arguments
+                            );
+                            return ret && typeof ret.then === "function"
+                                ? ret
+                                : Promise.resolve();
+                        } catch (e) {
+                            const err =
+                                e instanceof DOMException
+                                    ? e
+                                    : new DOMException(
+                                          e && e.message
+                                              ? e.message
+                                              : "Failed to enter fullscreen",
+                                          "NotAllowedError"
+                                      );
+                            return Promise.reject(err);
+                        }
                     }
+                    return Promise.reject(
+                        new DOMException(
+                            "Fullscreen API not available",
+                            "NotSupportedError"
+                        )
+                    );
                 };
             }
         } catch (e) {
@@ -111,9 +200,15 @@
 
     // Don't polyfill if it already exists
     function initPolyfill() {
-        const shouldSetup =
-            typeof document[spec[1]] === "undefined" &&
-            fsVendorKeywords.length > 0;
+        let shouldSetup = false;
+        try {
+            shouldSetup =
+                typeof document[spec[1]] === "undefined" &&
+                fsVendorKeywords.length > 0;
+        } catch (e) {
+            // If even checking throws (very restrictive env), do not setup.
+            shouldSetup = false;
+        }
 
         if (shouldSetup) {
             setupShim();

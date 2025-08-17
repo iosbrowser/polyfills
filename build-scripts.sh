@@ -235,10 +235,11 @@ process_js_folder() {
 
     echo "Processing folder: $folder_name"
 
-    # Check for npx command once per folder
+    # Check for npx command once per folder (we may still copy files without transpilation)
+    local HAS_NPX=1
     if ! command -v npx &>/dev/null; then
-        echo "  Warning: npx not found. Skipping transpilation/minification for $folder_name" >&2
-        return 0
+        HAS_NPX=0
+        echo "  Warning: npx not found. Will copy without transpile/minify for $folder_name" >&2
     fi
 
     # Process each JS file in the folder
@@ -276,48 +277,100 @@ process_js_folder() {
             fi
         fi
 
-        # Check if file has changed
+        # Check skip-transform directive
+        local skip_transform=0
+        if head -n 5 "$js_file" | grep -q "@polyfills-prebuilt: skip-transform"; then
+            skip_transform=1
+        fi
+
+        # Check if file has changed (still copy if changed even when skipping transforms)
         if [ -n "$source_file" ] && ! file_has_changed "$source_file" "$js_file"; then
             echo "  ↻ Unchanged: $filename (skipped)"
             continue
         fi
 
-        local temp_js_transpiled
-        local temp_js_minified
+        if [ "$skip_transform" -eq 1 ]; then
+            if [ "$HAS_NPX" -eq 1 ]; then
+        # Prebuilt: transpile to iOS 8 using project config in PREBUILT mode, then minify
+                local temp_js_transpiled
+                local temp_js_minified
+                temp_js_transpiled=$(mktemp)
+                temp_js_minified=$(mktemp)
 
-        temp_js_transpiled=$(mktemp)
-        temp_js_minified=$(mktemp)
-
-        # Local trap for temp files
-        trap 'rm -f "$temp_js_transpiled" "$temp_js_minified"; trap - RETURN EXIT INT TERM' RETURN EXIT INT TERM
-
-        # Transpile with Babel
-        if npx babel "$js_file" -o "$temp_js_transpiled" 2>/dev/null; then
-            # Minify with UglifyJS
-            if npx uglifyjs "$temp_js_transpiled" -o "$temp_js_minified" 2>/dev/null; then
-                cp "$temp_js_minified" "$js_file"
-                echo "  ✓ Processed: $filename (transpiled + minified)"
-
+        if BABEL_ENV=prebuilt npx babel "$js_file" -o "$temp_js_transpiled" 2>/dev/null; then
+                    if npx uglifyjs "$temp_js_transpiled" -c -m -o "$temp_js_minified" 2>/dev/null; then
+                        cp "$temp_js_minified" "$js_file"
+            echo "  ✓ ES5 + minified: $filename (prebuilt iOS8)"
+                    else
+                        cp "$temp_js_transpiled" "$js_file"
+                        echo "  ⚠ ES5 only: $filename (uglify failed)"
+                    fi
+        elif npx babel "$js_file" --no-babelrc --plugins @babel/plugin-transform-arrow-functions -o "$temp_js_transpiled" 2>/dev/null; then
+                    if npx uglifyjs "$temp_js_transpiled" -c -m -o "$temp_js_minified" 2>/dev/null; then
+                        cp "$temp_js_minified" "$js_file"
+            echo "  ✓ ES5 + minified: $filename (prebuilt, arrows->functions)"
+                    else
+                        cp "$temp_js_transpiled" "$js_file"
+                        echo "  ⚠ ES5 only: $filename (uglify failed)"
+                    fi
+                else
+                    # Fallback: minify only
+                    if npx uglifyjs "$js_file" -c -m -o "$temp_js_minified" 2>/dev/null; then
+                        cp "$temp_js_minified" "$js_file"
+                        echo "  ✓ Minified only: $filename (prebuilt, no babel plugins)"
+                    else
+                        echo "  ⚠ Skipped transforms: $filename (prebuilt, no babel/uglify)"
+                    fi
+                fi
                 # Update cache if we have source file
                 if [ -n "$source_file" ]; then
                     update_cache "$source_file"
                 fi
             else
-                # Minification failed, use transpiled version
-                cp "$temp_js_transpiled" "$js_file"
-                echo "  ⚠ Transpiled only: $filename (minification failed)"
-
-                # Update cache if we have source file
+                # No npx, leave file as-is but update cache
+                echo "  ⤴ Skipped transforms: $filename (prebuilt, no npx)"
                 if [ -n "$source_file" ]; then
                     update_cache "$source_file"
                 fi
             fi
         else
-            # Transpilation failed, keep original
-            echo "  ✗ Skipped: $filename (transpilation failed)"
-        fi
+            local temp_js_transpiled
+            local temp_js_minified
 
-        # Cleanup handled by trap
+            temp_js_transpiled=$(mktemp)
+            temp_js_minified=$(mktemp)
+
+            # Local trap for temp files
+            trap 'rm -f "$temp_js_transpiled" "$temp_js_minified"; trap - RETURN EXIT INT TERM' RETURN EXIT INT TERM
+
+            # Transpile with Babel
+            if npx babel "$js_file" -o "$temp_js_transpiled" 2>/dev/null; then
+                # Minify with UglifyJS
+                if npx uglifyjs "$temp_js_transpiled" -o "$temp_js_minified" 2>/dev/null; then
+                    cp "$temp_js_minified" "$js_file"
+                    echo "  ✓ Processed: $filename (transpiled + minified)"
+
+                    # Update cache if we have source file
+                    if [ -n "$source_file" ]; then
+                        update_cache "$source_file"
+                    fi
+                else
+                    # Minification failed, use transpiled version
+                    cp "$temp_js_transpiled" "$js_file"
+                    echo "  ⚠ Transpiled only: $filename (minification failed)"
+
+                    # Update cache if we have source file
+                    if [ -n "$source_file" ]; then
+                        update_cache "$source_file"
+                    fi
+                fi
+            else
+                # Transpilation failed, keep original
+                echo "  ✗ Skipped: $filename (transpilation failed)"
+            fi
+
+            # Cleanup handled by trap
+        fi
     done
 
     echo "  Completed processing $folder_name"
