@@ -1,6 +1,7 @@
 # Recommended WebKit Experimental Features to Enable
 
 - `CSS Cascade Layers` (e.g. CSS `@layer`)
+- `CSS color-mix()`
 - `CSS Containment` (e.g. CSS `contain: paint;`)
 - `CSS Overscroll Behavior` (e.g. CSS `overscroll-behavior: contain;`)
 - `CSS overflow: clip support` (e.g. CSS `overflow: clip;`)
