@@ -4,7 +4,7 @@ set -e
 
 INPUT_ICON=icon.png
 INPUT_OUTLINE_ICON=icon-outline.png
-TWEAK_ICON_PATH=layout/Library/PreferenceLoader/Preferences/Polyfills
+TWEAK_ICON_PATH=layout/Library/PreferenceBundles/PolyfillsPreferences.bundle
 CC_ICON_PATH=PolyfillsCC/Resources
 
 resize_icon() {

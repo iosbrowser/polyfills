@@ -81,22 +81,35 @@ static NSString *loadJSFromDirectory(NSString *directoryPath) {
                        sortedArrayUsingSelector:@selector(localizedCaseInsensitiveCompare:)];
 
     NSMutableString *combinedScript = [NSMutableString string];
+    // Load user preferences once per directory load
+    CFArrayRef disabledScripts = (CFArrayRef)CFPreferencesCopyAppValue(disabledScriptsKey, domain);
+    NSSet *disabledSet = nil;
+    if (disabledScripts && CFGetTypeID(disabledScripts) == CFArrayGetTypeID()) {
+        NSArray *arr = (__bridge NSArray *)disabledScripts;
+        NSMutableArray *lower = [NSMutableArray arrayWithCapacity:arr.count];
+        for (id obj in arr) {
+            if ([obj isKindOfClass:[NSString class]]) {
+                [lower addObject:[(NSString *)obj lowercaseString]];
+            }
+        }
+        if (lower.count) disabledSet = [NSSet setWithArray:lower];
+    }
+    if (disabledScripts) CFRelease(disabledScripts);
+
     for (NSString *fileName in jsFiles) {
+        if (disabledSet && [disabledSet containsObject:fileName.lowercaseString]) continue;
         NSString *filePath = [directoryPath stringByAppendingPathComponent:fileName];
         NSString *content = loadJSFromFile(filePath);
-        if (content) {
-            if ([fileName isEqualToString:@"Navigator.hardwareConcurrency.js"]) {
-                NSInteger coreCount = [[NSProcessInfo processInfo] processorCount];
-                NSInteger clamped = (coreCount <= 2) ? 2 :
-                                    (coreCount <= 4) ? 4 :
-                                    (coreCount <= 6) ? 6 : 8;
-                NSString *js = [NSString stringWithFormat:@"window.__injectedHardwareConcurrency__ = %ld;", (long)clamped];
-                content = [js stringByAppendingString:content];
-            }
-            // Wrap each file in an IIFE to avoid leaking variables/functions across files
-            NSString *wrapped = [NSString stringWithFormat:@"(function(){\n%@\n})();\n", content];
-            [combinedScript appendString:wrapped];
+        if (!content) continue;
+        if ([fileName isEqualToString:@"Navigator.hardwareConcurrency.js"]) {
+            NSInteger coreCount = [[NSProcessInfo processInfo] processorCount];
+            NSInteger clamped = (coreCount <= 2) ? 2 : (coreCount <= 4) ? 4 : (coreCount <= 6) ? 6 : 8;
+            NSString *js = [NSString stringWithFormat:@"window.__injectedHardwareConcurrency__ = %ld;", (long)clamped];
+            content = [js stringByAppendingString:content];
         }
+        // Wrap every script with a guard that consults window.__pfShouldRun(scriptName)
+        NSString *wrapped = [NSString stringWithFormat:@"(function(n){try{if(window.__pfShouldRun && !window.__pfShouldRun(n)) return;}catch(e){}\n%@\n})(\"%@\");\n", content, fileName];
+        [combinedScript appendString:wrapped];
     }
 
     return [combinedScript copy];
@@ -287,17 +300,46 @@ static void loadAndInjectScriptsImmediately(WKUserContentController *controller)
                 [combinedEndScripts appendString:postScripts];
             }
 
-            // Inject combined scripts as single WKUserScript objects
+            // Prepare per-site (and optional path) blacklist dictionary from preferences
+            CFDictionaryRef blacklistPref = (CFDictionaryRef)CFPreferencesCopyAppValue(scriptBlacklistKey, domain);
+            NSDictionary *blacklistDict = nil;
+            if (blacklistPref && CFGetTypeID(blacklistPref) == CFDictionaryGetTypeID()) {
+                blacklistDict = [(__bridge NSDictionary *)blacklistPref copy];
+            }
+            if (blacklistPref) CFRelease(blacklistPref);
+
+            // Build prelude defining window.__pfShouldRun for blacklist enforcement.
+            NSString *prelude = nil;
+            if (blacklistDict.count) {
+                NSData *jsonData = [NSJSONSerialization dataWithJSONObject:blacklistDict options:0 error:nil];
+                NSString *json = [[NSString alloc] initWithData:jsonData encoding:NSUTF8StringEncoding];
+                if (!json) json = @"{}";
+                NSMutableString *p = [NSMutableString string];
+                [p appendString:@"(function(){\nvar __pfBL = "]; [p appendString:json]; [p appendString:@";\nwindow.__pfShouldRun = function(script){var orig=script;script=String(script||'').toLowerCase();var arr=__pfBL[script];if(!arr||!arr.length)return true;var h=location.hostname.toLowerCase();var path=location.pathname;for(var i=0;i<arr.length;i++){var e=String(arr[i]||'').toLowerCase();if(!e)continue;var slash=e.indexOf('/');if(slash<0){if(h===e||h.endsWith('.'+e)){try{console.log('[Polyfills] Skipped '+orig+' on '+location.host+' (domain '+e+')');}catch(_){ }return false;}}else{var host=e.substring(0,slash);var pref=e.substring(slash+1);if(h===host||h.endsWith('.'+host)){var prefPath='/' + pref.replace(/^\\/+/, '');if(path===prefPath||path.startsWith(prefPath+(prefPath.endsWith('/')?'':'/'))||path.startsWith(prefPath)){try{console.log('[Polyfills] Skipped '+orig+' on '+location.host+path+' (prefix '+e+')');}catch(_){ }return false;}}}}return true;};\n})();\n"];
+                prelude = p;
+            }
+
+            // If there are only post scripts but no start scripts, attach prelude to post scripts.
+            if (prelude) {
+                if (combinedStartScripts.length > 0) {
+                    [combinedStartScripts insertString:prelude atIndex:0];
+                } else if (combinedEndScripts.length > 0) {
+                    [combinedEndScripts insertString:prelude atIndex:0];
+                }
+            }
+
+            // Inject combined scripts as single WKUserScript objects (each individual script wrapper checks blacklist)
             dispatch_async(dispatch_get_main_queue(), ^{
                 if (combinedStartScripts.length > 0 && controller) {
-                    [controller addUserScript:[[WKUserScript alloc] initWithSource:[combinedStartScripts copy]
+                    NSString *source = [combinedStartScripts copy];
+                    [controller addUserScript:[[WKUserScript alloc] initWithSource:source
                                                                       injectionTime:WKUserScriptInjectionTimeAtDocumentStart
                                                                    forMainFrameOnly:NO]];
                     HBLogDebug(@"Polyfills: Injected combined start scripts (%lu chars)", (unsigned long)combinedStartScripts.length);
                 }
-
                 if (combinedEndScripts.length > 0 && controller) {
-                    [controller addUserScript:[[WKUserScript alloc] initWithSource:[combinedEndScripts copy]
+                    NSString *source = [combinedEndScripts copy];
+                    [controller addUserScript:[[WKUserScript alloc] initWithSource:source
                                                                       injectionTime:WKUserScriptInjectionTimeAtDocumentEnd
                                                                    forMainFrameOnly:NO]];
                     HBLogDebug(@"Polyfills: Injected combined end scripts (%lu chars)", (unsigned long)combinedEndScripts.length);
