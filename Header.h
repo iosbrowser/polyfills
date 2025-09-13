@@ -1,5 +1,6 @@
 #define domain CFSTR("com.apple.UIKit")
 #define key CFSTR("PolyfillsEnabled")
 #define userAgentKey CFSTR("PolyfillsUserAgentEnabled")
+#define headerInjectionKey CFSTR("PolyfillsHeaderInjectionEnabled")
 #define disabledScriptsKey CFSTR("PolyfillsDisabledScripts")
 #define scriptBlacklistKey CFSTR("PolyfillsScriptBlacklist")

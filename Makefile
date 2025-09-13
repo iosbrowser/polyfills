@@ -18,8 +18,11 @@ include $(THEOS)/makefiles/common.mk
 
 TWEAK_NAME = Polyfills
 
-$(TWEAK_NAME)_FILES = Tweak.x
+$(TWEAK_NAME)_FILES = Tweak.x ModHeader.x
 $(TWEAK_NAME)_CFLAGS = -fobjc-arc
+ifneq ($(THEOS_PACKAGE_SCHEME),rootless)
+$(TWEAK_NAME)_CFLAGS += -Wno-unguarded-availability-new
+endif
 
 include $(THEOS_MAKE_PATH)/tweak.mk
 

@@ -69,9 +69,6 @@ static NSArray* PFScriptDirs(void)
                                                           detail:Nil
                                                             cell:PSGroupCell
                                                             edit:Nil];
-        [grp setProperty:@"Spoof User Agent to iOS 16.3. May improve compatibility on some websites. May also break "
-                         @"some other websites."
-                  forKey:@"footerText"];
         [specs addObject:grp];
 
         PSSpecifier* en = [PSSpecifier preferenceSpecifierNamed:@"Enabled"
@@ -86,7 +83,19 @@ static NSArray* PFScriptDirs(void)
         [en setProperty:@YES forKey:@"default"];
         [specs addObject:en];
 
-        PSSpecifier* ua = [PSSpecifier preferenceSpecifierNamed:@"Spoof User Agent"
+        // Group for Spoof User Agent toggle
+        PSSpecifier* uaGrp = [PSSpecifier preferenceSpecifierNamed:@"Spoof User Agent"
+                                                            target:self
+                                                               set:NULL
+                                                               get:NULL
+                                                            detail:Nil
+                                                              cell:PSGroupCell
+                                                              edit:Nil];
+        [uaGrp setProperty:@"Spoof User Agent to iOS 16.3. May improve compatibility on some websites. May also break "
+                           @"some other websites."
+                    forKey:@"footerText"];
+        [specs addObject:uaGrp];
+        PSSpecifier* ua = [PSSpecifier preferenceSpecifierNamed:@"Enabled"
                                                          target:self
                                                             set:@selector(setPreferenceValue:specifier:)
                                                             get:@selector(readPreferenceValue:)
@@ -97,6 +106,36 @@ static NSArray* PFScriptDirs(void)
         [ua setProperty:(__bridge NSString*)userAgentKey forKey:@"key"];
         [ua setProperty:@NO forKey:@"default"];
         [specs addObject:ua];
+        NSOperatingSystemVersion osv = [[NSProcessInfo processInfo] operatingSystemVersion];
+        // iOS version gate: show only on iOS 11.0 - 16.3 inclusive
+        BOOL showHeaderToggle = (osv.majorVersion == 11 || osv.majorVersion > 11) && // >=11
+                                ((osv.majorVersion < 16) || (osv.majorVersion == 16 && osv.minorVersion <= 3));
+        if (showHeaderToggle)
+        {
+            // Group for Header Injection toggle with explanatory footer
+            PSSpecifier* hiGrp = [PSSpecifier preferenceSpecifierNamed:@"Header Injection"
+                                                                target:self
+                                                                   set:NULL
+                                                                   get:NULL
+                                                                detail:Nil
+                                                                  cell:PSGroupCell
+                                                                  edit:Nil];
+            [hiGrp setProperty:@"Inject Sec-Fetch-* headers for certain requests (iOS < 16.4). Can improve site "
+                               @"compatibility; disable if pages misbehave."
+                        forKey:@"footerText"];
+            [specs addObject:hiGrp];
+            PSSpecifier* hi = [PSSpecifier preferenceSpecifierNamed:@"Enabled"
+                                                             target:self
+                                                                set:@selector(setPreferenceValue:specifier:)
+                                                                get:@selector(readPreferenceValue:)
+                                                             detail:Nil
+                                                               cell:PSSwitchCell
+                                                               edit:Nil];
+            [hi setProperty:(__bridge NSString*)domain forKey:@"defaults"];
+            [hi setProperty:(__bridge NSString*)headerInjectionKey forKey:@"key"];
+            [hi setProperty:@NO forKey:@"default"];
+            [specs addObject:hi];
+        }
 
         PSSpecifier* scriptsGrp = [PSSpecifier preferenceSpecifierNamed:@"Scripts"
                                                                  target:self
@@ -115,7 +154,6 @@ static NSArray* PFScriptDirs(void)
                                                                                   options:0
                                                                                     error:nil];
         NSMutableSet* seen = [NSMutableSet set];
-        NSOperatingSystemVersion osv = [[NSProcessInfo processInfo] operatingSystemVersion];
         for (NSString* top in PFScriptDirs())
         {
             NSString* topPath = [[PFBasePath() stringByAppendingPathComponent:top] stringByStandardizingPath];
