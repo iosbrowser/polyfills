@@ -8,7 +8,7 @@ This tweak injects JavaScript polyfills to enhance web compatibility for older i
 
 The JavaScript polyfills can be found in `/scripts`, `/scripts-priority` and `/scripts-post` folders.
 
-The scripts under `/scripts` are injected at [the document start](https://developer.apple.com/documentation/webkit/wkuserscriptinjectiontime/atdocumentstart?language=objc), while those in `/scripts-post` are injected after [the document has loaded](https://developer.apple.com/documentation/webkit/wkuserscriptinjectiontime/atdocumentend?language=objc).
+The scripts under `/scripts` are injected at [the document start](https://developer.apple.com/documentation/webkit/wkuserscriptinjectiontime/atdocumentstart?language=objc). The scripts under `/scripts-post` are injected after [the document has loaded](https://developer.apple.com/documentation/webkit/wkuserscriptinjectiontime/atdocumentend?language=objc). The scripts under `/scripts-priority` are injected at document start, but with a higher priority than those in `/scripts`. This is useful for polyfills that need to be applied before any other scripts run.
 
 The scripts may be put under a folder named after the specific iOS version, such as `15.0`. The scripts inside that folder will only be injected when the device iOS version is **no more than** the version specified in the folder name. That is, they will run under iOS 14.8 and earlier.
 
