@@ -6,12 +6,10 @@
 // @author       iOS Polyfills Team
 // @match        *://*/*
 // @run-at       document-start
-// @grant        GM_addStyle
 // @grant        GM_getValue
 // @grant        GM_setValue
 // @grant        GM_registerMenuCommand
 // @grant        GM_unregisterMenuCommand
-// @grant        unsafeWindow
 // ==/UserScript==
 
 (function() {
