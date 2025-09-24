@@ -39,7 +39,7 @@ If the website uses modern JavaScript features or APIs that are not supported by
 
 # Userscript
 
-**[📥 Install](https://raw.githubusercontent.com/iosbrowser/polyfills/refs/heads/main/ios-polyfills-userscript.js)** (Requires [Tampermonkey](https://tampermonkey.net/))
+**[📥 Install](https://raw.githubusercontent.com/iosbrowser/polyfills/refs/heads/main/ios-polyfills.user.js)** (Requires [Tampermonkey](https://tampermonkey.net/))
 
 Brings iOS polyfills to desktop browsers. Automatically detects missing features and applies fixes.
 
