@@ -37,6 +37,12 @@ TL;DR: Depends.
 
 If the website uses modern JavaScript features or APIs that are not supported by the iOS version you are using, this tweak will help polyfill those features. However, it may not cover every single case, especially if the website relies on very recent web standards or APIs that cannot be remedied with JavaScript alone.
 
+# Userscript
+
+**[📥 Install](https://raw.githubusercontent.com/iosbrowser/polyfills/refs/heads/main/ios-polyfills-userscript.js)** (Requires [Tampermonkey](https://tampermonkey.net/))
+
+Brings iOS polyfills to desktop browsers. Automatically detects missing features and applies fixes.
+
 # Additional Notes
 
 Check out the [WKExperimentalFeatures.md](WKExperimentalFeatures.md) file for recommended WebKit experimental features to enable to enhance web compatibility further.
