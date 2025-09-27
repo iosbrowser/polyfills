@@ -6,107 +6,17 @@
 // @author       iOS Polyfills Team
 // @match        *://*/*
 // @run-at       document-start
-// @grant        GM_getValue
-// @grant        GM_setValue
-// @grant        GM_registerMenuCommand
-// @grant        GM_unregisterMenuCommand
+// @grant        none
 // ==/UserScript==
 
 (function() {
     'use strict';
 
-    console.log('iOS Polyfills Userscript started.');
+    console.log('[iOS-Polyfills] Userscript started.');
 
-    // ============ Configuration and Utility Functions ============
-    const STORAGE_KEYS = {
-        enabled: 'ios_polyfills_enabled',
-        debugMode: 'ios_polyfills_debug'
-    };
+    // ============ Simple Logging ============
+    const log = (...args) => console.log('[iOS-Polyfills]', ...args);
 
-    const DEFAULTS = {
-        enabled: true,
-        debugMode: false
-    };
-
-    const logPrefix = '[iOS-Polyfills]';
-    const log = (...args) => {
-        if (getDebugMode()) console.log(logPrefix, ...args);
-    };
-    const warn = (...args) => console.warn(logPrefix, ...args);
-    const error = (...args) => console.error(logPrefix, ...args);
-
-    function getEnabled() {
-        return Boolean(GM_getValue(STORAGE_KEYS.enabled, DEFAULTS.enabled));
-    }
-
-    function setEnabled(v) {
-        GM_setValue(STORAGE_KEYS.enabled, Boolean(v));
-        refreshMenu();
-    }
-
-    function getDebugMode() {
-        return Boolean(GM_getValue(STORAGE_KEYS.debugMode, DEFAULTS.debugMode));
-    }
-
-    function setDebugMode(v) {
-        GM_setValue(STORAGE_KEYS.debugMode, Boolean(v));
-        refreshMenu();
-    }
-
-    // ============ Menu Management ============
-    let menuIds = [];
-
-    function refreshMenu() {
-        // Clear old menu items
-        if (menuIds.length) {
-            try { 
-                menuIds.forEach(GM_unregisterMenuCommand); 
-            } catch(e) {}
-            menuIds = [];
-        }
-
-        const id1 = GM_registerMenuCommand(
-            getEnabled() ? '✅ Disable Polyfills' : '❌ Enable Polyfills',
-            () => setEnabled(!getEnabled())
-        );
-
-        const id2 = GM_registerMenuCommand(
-            getDebugMode() ? '🔍 Disable Debug Mode' : '🔍 Enable Debug Mode',
-            () => setDebugMode(!getDebugMode())
-        );
-
-        const id3 = GM_registerMenuCommand('📊 Check Browser Support', showBrowserSupport);
-
-        menuIds.push(id1, id2, id3);
-    }
-
-    function showBrowserSupport() {
-        const features = [
-            'Array.from', 'Array.includes', 'Object.assign', 'Promise', 
-            'Array.flat', 'String.padStart', 'ResizeObserver', 'Promise.any'
-        ];
-        
-        const support = features.map(feature => {
-            const supported = checkFeatureSupport(feature);
-            return `${feature}: ${supported ? '✅' : '❌'}`;
-        }).join('\n');
-
-        alert(`Browser Feature Support:\n\n${support}`);
-    }
-
-    function checkFeatureSupport(feature) {
-        try {
-            const parts = feature.split('.');
-            let obj = window;
-            for (const part of parts) {
-                obj = obj[part];
-                if (obj === undefined) return false;
-            }
-            return true;
-        } catch {
-            return false;
-        }
-    }
 
     // ============ iOS 9.0 Polyfills ============
     function applyiOS90Polyfills() {
@@ -568,11 +478,6 @@
 
     // ============ Main Execution Logic ============
     function applyAllPolyfills() {
-        if (!getEnabled()) {
-            log('Polyfills disabled by user');
-            return;
-        }
-
         log('Starting iOS Polyfills application...');
 
         // Apply polyfills in iOS version order
@@ -583,11 +488,17 @@
         applyiOS160Polyfills();  // Polyfills needed for iOS 16.0 and earlier
 
         log('All polyfills applied successfully');
+        
+        // Force display completion message for debugging
+        console.log('[iOS-Polyfills] ✅ Polyfills application completed!');
+        
+        // Test if a simple polyfill works
+        if (Array.from) {
+            console.log('[iOS-Polyfills] 🧪 Array.from test:', Array.from('hello'));
+        }
     }
 
     function applyPostScripts() {
-        if (!getEnabled()) return;
-        
         log('Applying post-load scripts...');
         applyViewportFixes();
         log('Post-load scripts applied');
@@ -595,8 +506,6 @@
 
     // ============ Initialization ============
     function init() {
-        refreshMenu();
-        
         // Apply polyfills at document start
         applyAllPolyfills();
         
@@ -607,7 +516,7 @@
             applyPostScripts();
         }
 
-        console.log('iOS Polyfills Userscript initialized successfully');
+        console.log('[iOS-Polyfills] ✅ Userscript initialized successfully!');
     }
 
     // Start the script
