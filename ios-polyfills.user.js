@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         iOS Polyfills - Mobile Compatibility Enhancement
 // @namespace    https://github.com/iosbrowser/ios-polyfills
-// @version      1.0.0
-// @description  Comprehensive compatibility script based on iOS Polyfills project, providing modern JavaScript features for older browsers
+// @version      1.0.1
+// @description  Comprehensive compatibility script with a debug UI for older browsers. Click the top bar for status.
 // @author       iOS Polyfills Team
 // @match        *://*/*
 // @run-at       document-start
@@ -12,25 +12,98 @@
 (function() {
     'use strict';
 
-    console.log('[iOS-Polyfills] Userscript started.');
+    // ============ Debugging UI & Status Tracking ============
+    let debugBar = null;
+    const polyfillsStatus = {};
 
-    // ============ Simple Logging ============
-    const log = (...args) => console.log('[iOS-Polyfills]', ...args);
+    function showStatusPopup() {
+        if (!document.body) {
+            alert('Document body not ready yet.');
+            return;
+        }
+        const existingPopup = document.getElementById('ios-polyfills-status-popup');
+        if (existingPopup) {
+            existingPopup.remove();
+            return;
+        }
+
+        const popup = document.createElement('div');
+        popup.id = 'ios-polyfills-status-popup';
+        Object.assign(popup.style, {
+            position: 'fixed', top: '50%', left: '50%', transform: 'translate(-50%, -50%)',
+            width: '90%', maxWidth: '400px', maxHeight: '80vh', overflowY: 'auto',
+            backgroundColor: 'white', color: 'black', border: '1px solid #ccc', borderRadius: '8px',
+            boxShadow: '0 4px 8px rgba(0,0,0,0.2)', zIndex: '2147483647', padding: '15px'
+        });
+
+        let content = '<h3 style="margin-top:0; border-bottom:1px solid #eee; padding-bottom:10px;">Polyfills Status</h3><ul style="margin:0; padding:0; list-style:none;">';
+        const sortedKeys = Object.keys(polyfillsStatus).sort();
+
+        if (sortedKeys.length === 0) {
+            content += '<li>Status not available yet.</li>';
+        } else {
+            for (const key of sortedKeys) {
+                const status = polyfillsStatus[key];
+                const color = status === 'Applied' ? 'color:green; font-weight:bold;' : 'color:black;';
+                content += `<li style="padding: 5px 0; border-bottom: 1px solid #f0f0f0;">${key}: <span style="${color}">${status}</span></li>`;
+            }
+        }
+        content += '</ul>';
+
+        const closeButton = document.createElement('button');
+        Object.assign(closeButton.style, {
+            position: 'absolute', top: '10px', right: '10px', background: 'transparent',
+            border: 'none', fontSize: '20px', cursor: 'pointer', padding: '0', lineHeight: '1'
+        });
+        closeButton.textContent = '×';
+        closeButton.onclick = () => popup.remove();
+
+        popup.innerHTML = content;
+        popup.prepend(closeButton);
+        document.body.appendChild(popup);
+    }
+
+    function createDebugBar() {
+        if (document.getElementById('ios-polyfills-debug-bar')) return;
+        debugBar = document.createElement('div');
+        debugBar.id = 'ios-polyfills-debug-bar';
+        Object.assign(debugBar.style, {
+            position: 'fixed', top: '0', left: '0', width: '100%',
+            backgroundColor: 'rgba(0, 0, 0, 0.8)', color: 'white', padding: '8px',
+            fontFamily: 'Menlo, monospace', fontSize: '12px', zIndex: '2147483646',
+            textAlign: 'left', boxSizing: 'border-box', cursor: 'pointer'
+        });
+        debugBar.textContent = '[iOS-Polyfills] Initializing...';
+        debugBar.addEventListener('click', showStatusPopup);
+        document.documentElement.appendChild(debugBar);
+    }
+
+    const log = (...args) => {
+        console.log('[iOS-Polyfills]', ...args);
+        if (debugBar) {
+            const message = args.map(arg => {
+                if (typeof arg === 'object' && arg !== null) {
+                    try { return JSON.stringify(arg); } catch (e) { return String(arg); }
+                }
+                return String(arg);
+            }).join(' ');
+            debugBar.textContent = `[iOS-Polyfills] ${message}`;
+        }
+    };
 
 
     // ============ iOS 9.0 Polyfills ============
     function applyiOS90Polyfills() {
-        log('Applying iOS 9.0 polyfills...');
+        log('Checking iOS 9.0 polyfills...');
 
-        // Array.from polyfill
+        // Array.from
         if (!Array.from) {
-            log('Adding Array.from polyfill');
+            polyfillsStatus['Array.from'] = 'Applied';
             Array.from = (function () {
                 var iteratorTypes = [
                     '[object Map Iterator]', '[object Set Iterator]',
                     '[object WeakMap Iterator]', '[object WeakSet Iterator]'
                 ];
-
                 var toStr = Object.prototype.toString;
                 var isCallable = function (fn) {
                     return typeof fn === 'function' || toStr.call(fn) === '[object Function]';
@@ -46,24 +119,12 @@
                     var len = toInteger(value);
                     return Math.min(Math.max(len, 0), maxSafeInteger);
                 };
-
-                return function from(arrayLike/*, mapFn, thisArg */) {
-                    var iteratee = function (item, k) {
-                        if (mapFn) {
-                            A[k] = typeof T === 'undefined' ? mapFn(item, k) : mapFn.call(T, item, k);
-                        } else {
-                            A[k] = item;
-                        }
-                        return k + 1;
-                    };
-
+                return function from(arrayLike) {
                     var C = this;
                     var items = Object(arrayLike);
-
                     if (arrayLike == null) {
                         throw new TypeError("Array.from requires an array-like object - not null or undefined");
                     }
-
                     var mapFn = arguments.length > 1 ? arguments[1] : void undefined;
                     var T;
                     if (typeof mapFn !== 'undefined') {
@@ -74,72 +135,64 @@
                             T = arguments[2];
                         }
                     }
-
                     var len = toLength(items.length);
                     var A = isCallable(C) ? Object(new C(len)) : new Array(len);
                     var k = 0;
-
-                    if (iteratorTypes.indexOf(items.toString()) !== -1) {
-                        var item;
-                        while (item = items.next().value) k = iteratee(item, k);
-                        A.length = k;
-                        return A;
+                    var kValue;
+                    while (k < len) {
+                        kValue = items[k];
+                        if (mapFn) {
+                            A[k] = typeof T === 'undefined' ? mapFn(kValue, k) : mapFn.call(T, kValue, k);
+                        } else {
+                            A[k] = kValue;
+                        }
+                        k += 1;
                     }
-
-                    while (k < len) k = iteratee(items[k], k);
                     A.length = len;
                     return A;
                 };
             }());
+        } else {
+            polyfillsStatus['Array.from'] = 'Native';
         }
 
-        // Array.includes polyfill
+        // Array.prototype.includes
         if (!Array.prototype.includes) {
-            log('Adding Array.prototype.includes polyfill');
+            polyfillsStatus['Array.prototype.includes'] = 'Applied';
             Array.prototype.includes = function(searchElement, fromIndex) {
                 if (this == null) {
                     throw new TypeError('"this" is null or not defined');
                 }
-
                 var o = Object(this);
-                var len = parseInt(o.length) || 0;
-
+                var len = o.length >>> 0;
                 if (len === 0) {
                     return false;
                 }
-
-                var n = parseInt(fromIndex) || 0;
-                var k;
-
-                if (n >= 0) {
-                    k = n;
-                } else {
-                    k = len + n;
-                    if (k < 0) {k = 0;}
-                }
-
+                var n = fromIndex | 0;
+                var k = Math.max(n >= 0 ? n : len - Math.abs(n), 0);
                 function sameValueZero(x, y) {
                     return x === y || (typeof x === 'number' && typeof y === 'number' && isNaN(x) && isNaN(y));
                 }
-
-                for (;k < len; k++) {
+                while (k < len) {
                     if (sameValueZero(o[k], searchElement)) {
                         return true;
                     }
+                    k++;
                 }
-
                 return false;
             };
+        } else {
+            polyfillsStatus['Array.prototype.includes'] = 'Native';
         }
 
-        // Object.assign polyfill
-        if (typeof Object.assign != "function") {
-            log('Adding Object.assign polyfill');
+        // Object.assign
+        if (typeof Object.assign != 'function') {
+            polyfillsStatus['Object.assign'] = 'Applied';
             Object.defineProperty(Object, "assign", {
                 value: function assign(target, varArgs) {
-                    "use strict";
+                    'use strict';
                     if (target == null) {
-                        throw new TypeError("Cannot convert undefined or null to object");
+                        throw new TypeError('Cannot convert undefined or null to object');
                     }
                     var to = Object(target);
                     for (var index = 1; index < arguments.length; index++) {
@@ -157,369 +210,303 @@
                 writable: true,
                 configurable: true
             });
+        } else {
+            polyfillsStatus['Object.assign'] = 'Native';
         }
-
-        // Number polyfills
+        
+        // Number.isNaN
         if (!Number.isNaN) {
-            log('Adding Number.isNaN polyfill');
-            Number.isNaN = function(value) {
-                return typeof value === 'number' && isNaN(value);
-            };
+            polyfillsStatus['Number.isNaN'] = 'Applied';
+            Number.isNaN = function(value) { return typeof value === 'number' && isNaN(value); };
+        } else {
+            polyfillsStatus['Number.isNaN'] = 'Native';
         }
 
+        // Number.isFinite
         if (!Number.isFinite) {
-            log('Adding Number.isFinite polyfill');
-            Number.isFinite = function(value) {
-                return typeof value === 'number' && isFinite(value);
-            };
+            polyfillsStatus['Number.isFinite'] = 'Applied';
+            Number.isFinite = function(value) { return typeof value === 'number' && isFinite(value); };
+        } else {
+            polyfillsStatus['Number.isFinite'] = 'Native';
         }
 
-        // WeakSet polyfill
+        // WeakSet
         if (typeof WeakSet === 'undefined') {
-            log('Adding WeakSet polyfill');
+            polyfillsStatus['WeakSet'] = 'Applied';
             window.WeakSet = (function() {
-                function WeakSet() {
-                    this._id = '_WeakSet_' + Math.random();
-                }
-                
-                WeakSet.prototype.add = function(obj) {
-                    if (Object(obj) !== obj) throw new TypeError("Invalid value used in weak set");
-                    obj[this._id] = true;
-                    return this;
-                };
-                
-                WeakSet.prototype.delete = function(obj) {
-                    if (Object(obj) !== obj) return false;
-                    if (obj[this._id]) {
-                        delete obj[this._id];
-                        return true;
-                    }
-                    return false;
-                };
-                
-                WeakSet.prototype.has = function(obj) {
-                    if (Object(obj) !== obj) return false;
-                    return !!obj[this._id];
-                };
-                
+                function WeakSet() { this._id = '_WeakSet_' + Math.random(); }
+                WeakSet.prototype.add = function(obj) { if (Object(obj) !== obj) throw new TypeError("Invalid value used in weak set"); obj[this._id] = true; return this; };
+                WeakSet.prototype.delete = function(obj) { if (Object(obj) !== obj) return false; return delete obj[this._id]; };
+                WeakSet.prototype.has = function(obj) { return Object(obj) === obj && !!obj[this._id]; };
                 return WeakSet;
             })();
+        } else {
+            polyfillsStatus['WeakSet'] = 'Native';
         }
     }
 
     // ============ iOS 10.0 Polyfills ============
     function applyiOS100Polyfills() {
-        log('Applying iOS 10.0 polyfills...');
+        log('Checking iOS 10.0 polyfills...');
 
-        // NodeList.forEach polyfill
+        // NodeList.forEach
         if (window.NodeList && !NodeList.prototype.forEach) {
-            log('Adding NodeList.prototype.forEach polyfill');
-            NodeList.prototype.forEach = function (callback, thisArg) {
-                thisArg = thisArg || window;
-                for (var i = 0; i < this.length; i++) {
-                    callback.call(thisArg, this[i], i, this);
-                }
-            };
+            polyfillsStatus['NodeList.prototype.forEach'] = 'Applied';
+            NodeList.prototype.forEach = Array.prototype.forEach;
+        } else {
+            polyfillsStatus['NodeList.prototype.forEach'] = 'Native';
         }
 
-        // String.padStart and padEnd polyfills
+        // String.padStart
         if (!String.prototype.padStart) {
-            log('Adding String.prototype.padStart polyfill');
+            polyfillsStatus['String.prototype.padStart'] = 'Applied';
             String.prototype.padStart = function padStart(targetLength, padString) {
                 targetLength = targetLength >> 0;
-                padString = String(typeof padString !== 'undefined' ? padString : ' ');
-                if (this.length > targetLength) {
-                    return String(this);
-                } else {
-                    targetLength = targetLength - this.length;
-                    if (targetLength > padString.length) {
-                        padString += padString.repeat(targetLength / padString.length);
-                    }
-                    return padString.slice(0, targetLength) + String(this);
+                padString = String((typeof padString !== 'undefined' ? padString : ' '));
+                if (this.length > targetLength) { return String(this); }
+                targetLength = targetLength - this.length;
+                if (targetLength > padString.length) {
+                    padString += padString.repeat(targetLength / padString.length);
                 }
+                return padString.slice(0, targetLength) + String(this);
             };
+        } else {
+            polyfillsStatus['String.prototype.padStart'] = 'Native';
         }
 
+        // String.padEnd
         if (!String.prototype.padEnd) {
-            log('Adding String.prototype.padEnd polyfill');
+            polyfillsStatus['String.prototype.padEnd'] = 'Applied';
             String.prototype.padEnd = function padEnd(targetLength, padString) {
                 targetLength = targetLength >> 0;
-                padString = String(typeof padString !== 'undefined' ? padString : ' ');
-                if (this.length > targetLength) {
-                    return String(this);
-                } else {
-                    targetLength = targetLength - this.length;
-                    if (targetLength > padString.length) {
-                        padString += padString.repeat(targetLength / padString.length);
-                    }
-                    return String(this) + padString.slice(0, targetLength);
+                padString = String((typeof padString !== 'undefined' ? padString : ' '));
+                if (this.length > targetLength) { return String(this); }
+                targetLength = targetLength - this.length;
+                if (targetLength > padString.length) {
+                    padString += padString.repeat(targetLength / padString.length);
                 }
+                return String(this) + padString.slice(0, targetLength);
             };
+        } else {
+            polyfillsStatus['String.prototype.padEnd'] = 'Native';
         }
     }
 
     // ============ iOS 12.0 Polyfills ============
     function applyiOS120Polyfills() {
-        log('Applying iOS 12.0 polyfills...');
-
-        // Array.flat and flatMap polyfills
+        log('Checking iOS 12.0 polyfills...');
+        
+        // Array.flat
         if (!Array.prototype.flat) {
-            log('Adding Array.prototype.flat polyfill');
-            Object.defineProperty(Array.prototype, "flat", {
+            polyfillsStatus['Array.prototype.flat'] = 'Applied';
+            Object.defineProperty(Array.prototype, 'flat', {
                 configurable: true,
-                value: function r() {
-                    var t = isNaN(arguments[0]) ? 1 : Number(arguments[0]);
-                    return t ? Array.prototype.reduce.call(this, function(a, e) {
-                        return Array.isArray(e) ? a.push.apply(a, r.call(e, t - 1)) : a.push(e), a;
+                value: function flat() {
+                    var depth = isNaN(arguments[0]) ? 1 : Number(arguments[0]);
+                    return depth ? Array.prototype.reduce.call(this, function (acc, cur) {
+                        if (Array.isArray(cur)) {
+                            acc.push.apply(acc, flat.call(cur, depth - 1));
+                        } else {
+                            acc.push(cur);
+                        }
+                        return acc;
                     }, []) : Array.prototype.slice.call(this);
                 },
                 writable: true
             });
+        } else {
+            polyfillsStatus['Array.prototype.flat'] = 'Native';
         }
-
+        
+        // Array.flatMap
         if (!Array.prototype.flatMap) {
-            log('Adding Array.prototype.flatMap polyfill');
-            Object.defineProperty(Array.prototype, "flatMap", {
+            polyfillsStatus['Array.prototype.flatMap'] = 'Applied';
+            Object.defineProperty(Array.prototype, 'flatMap', {
                 configurable: true,
-                value: function(r) {
+                value: function (callback) {
                     return Array.prototype.map.apply(this, arguments).flat();
                 },
                 writable: true
             });
+        } else {
+            polyfillsStatus['Array.prototype.flatMap'] = 'Native';
         }
 
-        // String.trimStart and trimEnd polyfills
+        // String.trimStart
         if (!String.prototype.trimStart) {
-            log('Adding String.prototype.trimStart polyfill');
-            String.prototype.trimStart = String.prototype.trimLeft || function() {
-                return this.replace(/^\s+/, '');
-            };
+            polyfillsStatus['String.prototype.trimStart'] = 'Applied';
+            String.prototype.trimStart = String.prototype.trimLeft || function () { return this.replace(/^\s+/, ''); };
+        } else {
+            polyfillsStatus['String.prototype.trimStart'] = 'Native';
         }
-
+        
+        // String.trimEnd
         if (!String.prototype.trimEnd) {
-            log('Adding String.prototype.trimEnd polyfill');
-            String.prototype.trimEnd = String.prototype.trimRight || function() {
-                return this.replace(/\s+$/, '');
-            };
+            polyfillsStatus['String.prototype.trimEnd'] = 'Applied';
+            String.prototype.trimEnd = String.prototype.trimRight || function () { return this.replace(/\s+$/, ''); };
+        } else {
+            polyfillsStatus['String.prototype.trimEnd'] = 'Native';
         }
     }
 
     // ============ iOS 14.0 Polyfills ============
     function applyiOS140Polyfills() {
-        log('Applying iOS 14.0 polyfills...');
-
-        // Promise.any polyfill
+        log('Checking iOS 14.0 polyfills...');
+        
+        // Promise.any
         if (!Promise.any) {
-            log('Adding Promise.any polyfill');
-            Promise.any = o => new Promise(((i, l) => {
-                var n, t, v, d, e;
-                let u = !1, c = [], h = 0, f = [];
-                function a(o) { u || (u = !0, i(o)); }
-                function r(o) { f.push(o), f.length >= h && l(new AggregateError(f, 'All promises were rejected')); }
-                for (let i of o) h++, c.push(i);
-                for (let o of c)
-                    void 0 !== (null === (n = o) || void 0 === n ? void 0 : n.then) || void 0 !== (null === (t = o) || void 0 === t ? void 0 : t.catch) ?
-                        (null === (d = null === (v = o) || void 0 === v ? void 0 : v.then((o => a(o)))) || void 0 === d || d.catch((o => {})),
-                            null === (e = o) || void 0 === e || e.catch((o => r(o)))) : a(o);
-            }));
-        }
-
-        // EventTarget polyfill for older browsers
-        if (typeof EventTarget === 'undefined') {
-            log('Adding EventTarget polyfill');
-            window.EventTarget = function() {
-                this.listeners = {};
-            };
-
-            EventTarget.prototype.addEventListener = function(type, callback) {
-                if (!(type in this.listeners)) {
-                    this.listeners[type] = [];
-                }
-                this.listeners[type].push(callback);
-            };
-
-            EventTarget.prototype.removeEventListener = function(type, callback) {
-                if (!(type in this.listeners)) {
-                    return;
-                }
-                var stack = this.listeners[type];
-                for (var i = 0, l = stack.length; i < l; i++) {
-                    if (stack[i] === callback) {
-                        stack.splice(i, 1);
+            polyfillsStatus['Promise.any'] = 'Applied';
+            Promise.any = function(promises) {
+                return new Promise((resolve, reject) => {
+                    const errors = [];
+                    let remaining = promises.length;
+                    if (remaining === 0) {
+                        reject(new AggregateError([], "All promises were rejected"));
                         return;
                     }
-                }
+                    promises.forEach(promise => {
+                        Promise.resolve(promise).then(resolve).catch(error => {
+                            errors.push(error);
+                            if (--remaining === 0) {
+                                reject(new AggregateError(errors, "All promises were rejected"));
+                            }
+                        });
+                    });
+                });
             };
-
-            EventTarget.prototype.dispatchEvent = function(event) {
-                if (!(event.type in this.listeners)) {
-                    return true;
+        } else {
+            polyfillsStatus['Promise.any'] = 'Native';
+        }
+        
+        // EventTarget
+        if (typeof EventTarget === 'undefined') {
+            polyfillsStatus['EventTarget'] = 'Applied';
+            window.EventTarget = function() { this.listeners = {}; };
+            Object.assign(EventTarget.prototype, {
+                addEventListener: function(type, callback) {
+                    if (!(type in this.listeners)) this.listeners[type] = [];
+                    this.listeners[type].push(callback);
+                },
+                removeEventListener: function(type, callback) {
+                    if (!(type in this.listeners)) return;
+                    const stack = this.listeners[type];
+                    for (let i = 0, l = stack.length; i < l; i++) {
+                        if (stack[i] === callback) { stack.splice(i, 1); return; }
+                    }
+                },
+                dispatchEvent: function(event) {
+                    if (!(event.type in this.listeners)) return true;
+                    const stack = this.listeners[event.type].slice();
+                    for (let i = 0, l = stack.length; i < l; i++) {
+                        stack[i].call(this, event);
+                    }
+                    return !event.defaultPrevented;
                 }
-                var stack = this.listeners[event.type].slice();
-                for (var i = 0, l = stack.length; i < l; i++) {
-                    stack[i].call(this, event);
-                }
-                return !event.defaultPrevented;
-            };
+            });
+        } else {
+            polyfillsStatus['EventTarget'] = 'Native';
         }
     }
 
     // ============ iOS 16.0 Polyfills ============
     function applyiOS160Polyfills() {
-        log('Applying iOS 16.0 polyfills...');
+        log('Checking iOS 16.0 polyfills...');
 
-        // Array.toSorted polyfill
+        // Array.toSorted
         if (!Array.prototype.toSorted) {
-            log('Adding Array.prototype.toSorted polyfill');
+            polyfillsStatus['Array.prototype.toSorted'] = 'Applied';
             Object.defineProperty(Array.prototype, 'toSorted', {
-                value: function (compareFn) {
-                    const O = Object(this);
-                    const len = parseInt(O.length) || 0;
-                    const items = [];
-                    
-                    for (let i = 0; i < len; i++) {
-                        if (i in O) {
-                            items[i] = O[i];
-                        }
-                    }
-
-                    if (compareFn !== undefined) {
-                        if (typeof compareFn !== 'function') {
-                            throw new TypeError('Comparefn must be a function');
-                        }
-                        return items.sort(compareFn);
-                    } else {
-                        return items.sort();
-                    }
-                },
-                writable: true,
-                configurable: true
+                value: function (compareFn) { return [...this].sort(compareFn); },
+                writable: true, configurable: true
             });
+        } else {
+            polyfillsStatus['Array.prototype.toSorted'] = 'Native';
         }
 
-        // Array.toReversed polyfill
+        // Array.toReversed
         if (!Array.prototype.toReversed) {
-            log('Adding Array.prototype.toReversed polyfill');
+            polyfillsStatus['Array.prototype.toReversed'] = 'Applied';
             Object.defineProperty(Array.prototype, 'toReversed', {
-                value: function() {
-                    const O = Object(this);
-                    const len = parseInt(O.length) || 0;
-                    const A = new Array(len);
-                    
-                    for (let k = 0; k < len; k++) {
-                        const from = len - k - 1;
-                        if (from in O) {
-                            A[k] = O[from];
-                        }
-                    }
-                    
-                    return A;
-                },
-                writable: true,
-                configurable: true
+                value: function () { return [...this].reverse(); },
+                writable: true, configurable: true
             });
+        } else {
+            polyfillsStatus['Array.prototype.toReversed'] = 'Native';
         }
 
-        // Array.with polyfill
+        // Array.with
         if (!Array.prototype.with) {
-            log('Adding Array.prototype.with polyfill');
+            polyfillsStatus['Array.prototype.with'] = 'Applied';
             Object.defineProperty(Array.prototype, 'with', {
-                value: function(index, value) {
-                    const O = Object(this);
-                    const len = parseInt(O.length) || 0;
-                    const relativeIndex = parseInt(index) || 0;
-                    const actualIndex = relativeIndex < 0 ? len + relativeIndex : relativeIndex;
-                    
-                    if (actualIndex >= len || actualIndex < 0) {
-                        throw new RangeError('Invalid index');
-                    }
-                    
-                    const A = new Array(len);
-                    for (let k = 0; k < len; k++) {
-                        A[k] = k === actualIndex ? value : O[k];
-                    }
-                    
-                    return A;
+                value: function (index, value) {
+                    const copy = [...this];
+                    copy[index] = value;
+                    return copy;
                 },
-                writable: true,
-                configurable: true
+                writable: true, configurable: true
             });
+        } else {
+            polyfillsStatus['Array.prototype.with'] = 'Native';
         }
     }
 
     // ============ Viewport Fixes (Post Scripts) ============
     function applyViewportFixes() {
         log('Applying viewport fixes...');
-        
-        // Viewport min-width polyfill
-        var viewport = document.querySelector("meta[name=viewport]");
+        const viewport = document.querySelector("meta[name=viewport]");
         if (viewport) {
-            var content = viewport.getAttribute("content");
-            var parts = content.split(",");
-            for (var i = 0; i < parts.length; ++i) {
-                var part = parts[i].trim();
-                var pair = part.split("=");
-                if (pair[0] === "min-width") {
-                    var minWidth = parseInt(pair[1]);
-                    if (screen.width < minWidth) {
-                        document.head.removeChild(viewport);
-
-                        var newViewport = document.createElement("meta");
-                        newViewport.setAttribute("name", "viewport");
-                        newViewport.setAttribute("content", "width=" + minWidth);
-                        document.head.appendChild(newViewport);
-                        log('Applied viewport min-width fix:', minWidth);
-                        break;
-                    }
+            const content = viewport.getAttribute("content");
+            const minWidthMatch = content.match(/min-width=(\d+)/);
+            if (minWidthMatch) {
+                const minWidth = parseInt(minWidthMatch[1], 10);
+                if (screen.width < minWidth) {
+                    viewport.setAttribute("content", "width=" + minWidth);
+                    log('Applied viewport min-width fix:', minWidth);
+                    polyfillsStatus['Viewport min-width'] = 'Applied';
+                    return;
                 }
             }
+            polyfillsStatus['Viewport min-width'] = 'Not Needed';
+        } else {
+            polyfillsStatus['Viewport min-width'] = 'Not Found';
         }
     }
 
     // ============ Main Execution Logic ============
     function applyAllPolyfills() {
-        log('Starting iOS Polyfills application...');
-
-        // Apply polyfills in iOS version order
-        applyiOS90Polyfills();   // Polyfills needed for iOS 9.0 and earlier
-        applyiOS100Polyfills();  // Polyfills needed for iOS 10.0 and earlier  
-        applyiOS120Polyfills();  // Polyfills needed for iOS 12.0 and earlier
-        applyiOS140Polyfills();  // Polyfills needed for iOS 14.0 and earlier
-        applyiOS160Polyfills();  // Polyfills needed for iOS 16.0 and earlier
-
-        log('All polyfills applied successfully');
-        
-        // Force display completion message for debugging
-        console.log('[iOS-Polyfills] ✅ Polyfills application completed!');
-        
-        // Test if a simple polyfill works
-        if (Array.from) {
-            console.log('[iOS-Polyfills] 🧪 Array.from test:', Array.from('hello'));
-        }
+        applyiOS90Polyfills();
+        applyiOS100Polyfills();
+        applyiOS120Polyfills();
+        applyiOS140Polyfills();
+        applyiOS160Polyfills();
+        log('Polyfill checks completed.');
     }
 
     function applyPostScripts() {
         log('Applying post-load scripts...');
         applyViewportFixes();
-        log('Post-load scripts applied');
+        log('Post-load scripts applied.');
     }
 
     // ============ Initialization ============
     function init() {
-        // Apply polyfills at document start
+        createDebugBar();
         applyAllPolyfills();
         
-        // Apply post scripts after document load
+        log(`State: ${document.readyState}. Waiting for DOMContentLoaded.`);
         if (document.readyState === 'loading') {
-            document.addEventListener('DOMContentLoaded', applyPostScripts);
+            document.addEventListener('DOMContentLoaded', () => {
+                log('DOMContentLoaded fired. Applying post-scripts.');
+                applyPostScripts();
+            });
         } else {
+            log('DOM already loaded. Applying post-scripts.');
             applyPostScripts();
         }
 
-        console.log('[iOS-Polyfills] ✅ Userscript initialized successfully!');
+        log('✅ Initialized. Click bar for details.');
     }
 
-    // Start the script
     init();
 
 })();
